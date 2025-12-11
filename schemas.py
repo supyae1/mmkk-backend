@@ -436,3 +436,45 @@ class PlaybookRuleRead(PlaybookRuleBase):
     id: str
     created_at: datetime
     updated_at: datetime
+# -----------------------------
+# Attribution Models
+# -----------------------------
+class AttributedChannel(BaseModel):
+    channel: str
+    first_touch: float
+    last_touch: float
+    linear: float
+
+
+class AttributionRequest(BaseModel):
+    account_id: Optional[int] = None   # if None → workspace level
+    lookback_days: int = 90
+
+
+class AttributionResponse(BaseModel):
+    account_id: Optional[int] = None
+    breakdown: List[AttributedChannel]
+
+
+# -----------------------------
+# Segmentation Models
+# -----------------------------
+class SegmentFilter(BaseModel):
+    field: str           # e.g., "industry", "stage"
+    operator: str        # eq, neq, contains
+    value: str
+
+
+class Segment(BaseModel):
+    name: str
+    account_ids: List[int]
+
+
+class SegmentationRequest(BaseModel):
+    workspace_id: int
+    filters: List[SegmentFilter]
+
+
+class SegmentationResponse(BaseModel):
+    segments: List[Segment]
+
