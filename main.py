@@ -12,6 +12,7 @@ from fastapi import (
     Response,
     status,
 )
+    # FastAPI setup
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
@@ -19,7 +20,13 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from database import Base, engine, get_db
-from ip_resolver import resolve_ipinfo
+# Try to import real IP resolver; if missing, use a dummy one so Render doesn't crash
+try:
+    from ip_resolver import resolve_ipinfo  # type: ignore
+except ImportError:
+    def resolve_ipinfo(ip: str):
+        # Fallback: no enrichment in this environment
+        return None
 from models import (
     Account,
     Alert,
@@ -561,7 +568,7 @@ def list_anon_visits(db: Session = Depends(get_db)):
 
 
 # ------------------------------------------------
-# TRACK (website/product intake)
+# TRACK (website/product intake with API key)
 # ------------------------------------------------
 
 
@@ -675,6 +682,38 @@ def track(
         "event_id": created_event_id,
         "ip_enriched": bool(ipinfo_data),
     }
+
+
+# ------------------------------------------------
+# PUBLIC ANONYMOUS TRACKING (no API key)
+# ------------------------------------------------
+
+@app.post("/public/track")
+async def public_track(request: Request, db: Session = Depends(get_db)):
+    """
+    Lightweight anonymous tracking endpoint for website visitors.
+    No API key required – safe for embedding directly in frontend JS.
+    """
+    ws = get_workspace_id()
+    data = await request.json()
+
+    url = data.get("url")
+    referrer = data.get("referrer")
+    ip = data.get("ip") or (request.client.host if request.client else None)
+    ua = request.headers.get("user-agent")
+
+    anon_visit = AnonymousVisit(
+        workspace_id=ws,
+        url=url,
+        referrer=referrer,
+        ip=ip,
+        user_agent=ua,
+    )
+    db.add(anon_visit)
+    db.commit()
+    db.refresh(anon_visit)
+
+    return {"status": "ok", "visit_id": anon_visit.id}
 
 
 # ------------------------------------------------
@@ -979,7 +1018,6 @@ def insights_competitors(db: Session = Depends(get_db)):
     response_model=PipelineSummary,
     dependencies=[Depends(verify_api_key)],
 )
-
 def insights_pipeline(db: Session = Depends(get_db)):
     """Return accounts with open pipeline + stage counts.
 
@@ -1052,7 +1090,6 @@ def insights_pipeline(db: Session = Depends(get_db)):
         total_open_accounts=total_open_accounts,
         items=items,
     )
-
 
 
 # ------------------------------------------------
