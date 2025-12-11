@@ -20,23 +20,15 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from database import Base, engine, get_db
-# Try to import real IP resolver; if missing, use a dummy one so Render doesn't crash
-try:
-   from database import Base, engine, get_db
 
-# Safe fallback so app runs even if ip_resolver.py does not exist
+# Safe import so Render doesn’t crash if ip_resolver.py is missing
 try:
-    from ip_resolver import resolve_ipinfo
+    from ip_resolver import resolve_ipinfo  # type: ignore
 except ImportError:
     def resolve_ipinfo(ip: str):
+        # Fallback: no enrichment – we still track the visit
         return None
 
-from models import (
- # type: ignore
-except ImportError:
-    def resolve_ipinfo(ip: str):
-        # Fallback: no enrichment in this environment
-        return None
 from models import (
     Account,
     Alert,
