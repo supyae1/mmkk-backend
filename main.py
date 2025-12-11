@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timedelta
+from io import StringIO
 from typing import Any, Dict, List, Optional
 
 from fastapi import (
@@ -12,21 +13,20 @@ from fastapi import (
     Response,
     status,
 )
-    # FastAPI setup
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import RedirectResponse
+from fastapi.responses import RedirectResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from database import Base, engine, get_db
 
-# Safe import so Render doesn’t crash if ip_resolver.py is missing
+# Try to import real IP resolver; if missing, use a dummy one so Render doesn't crash
 try:
     from ip_resolver import resolve_ipinfo  # type: ignore
 except ImportError:
     def resolve_ipinfo(ip: str):
-        # Fallback: no enrichment – we still track the visit
+        # Fallback: no enrichment in this environment
         return None
 
 from models import (
@@ -35,8 +35,12 @@ from models import (
     AnonymousVisit,
     APIKey,
     Contact,
+    CRMConnection,
     Event,
+    ExternalObjectMap,
     IpCompanyMap,
+    Opportunity,
+    PlaybookRule,
     Task,
     Workspace,
 )
@@ -64,8 +68,27 @@ from schemas import (
     TopAccountItem,
     TopAccountsResponse,
     TrackEventPayload,
+    # Attribution & Segmentation
+    AttributedChannel,
+    AttributionRequest,
+    AttributionResponse,
+    SegmentFilter,
+    Segment,
+    SegmentationRequest,
+    SegmentationResponse,
+    # CRM / Opportunities / Playbooks
+    CRMAccountUpsert,
+    CRMContactUpsert,
+    CRMOpportunityUpsert,
+    OpportunityCreate,
+    OpportunityRead,
+    OpportunityUpdate,
+    PlaybookRuleCreate,
+    PlaybookRuleRead,
 )
 from scoring import score_event, _buyer_stage_from_scores
+from ai_scoring import generate_ai_insights
+from analytics import multi_touch_attribution, segment_accounts
 
 # ------------------------------------------------
 # App setup
@@ -154,9 +177,19 @@ async def verify_api_key(x_api_key: str = Header(..., alias="X-API-Key")):
         )
 
 
+# ------------------------------------------------
+# Health
+# ------------------------------------------------
+
 @app.get("/health")
 def health():
     return {"status": "ok"}
+
+
+@app.head("/health")
+def health_head() -> Response:
+    # For Render / uptime checks that use HEAD instead of GET
+    return Response(status_code=200)
 
 
 # ------------------------------------------------
@@ -482,9 +515,11 @@ def list_alerts(db: Session = Depends(get_db)):
     )
     return [AlertRead.model_validate(a) for a in alerts]
 
+
 # ------------------------------------------------
-# SIMPLE PLAYBOOK ENGINE (HIGH-INTENT RULE)
+# SIMPLE PLAYBOOK ENGINE (DEMO HIGH-INTENT RULE)
 # ------------------------------------------------
+
 
 def evaluate_playbooks_for_account(db: Session, account: Account):
     """
@@ -494,7 +529,7 @@ def evaluate_playbooks_for_account(db: Session, account: Account):
     - 1 high-intent alert
     - 1 follow-up task
 
-    Later we can make this respect real playbook configs & thresholds.
+    Later you can replace this with real playbook configs.
     """
     ws = account.workspace_id
     created_tasks = 0
@@ -503,8 +538,7 @@ def evaluate_playbooks_for_account(db: Session, account: Account):
     total = float(account.total_score or 0.0)
     intent = float(account.intent_score or 0.0)
 
-    # You can tighten this later (e.g. >= 3); for demo we just require some score
-    if total >= 0 or intent >= 0:
+    if total >= 0 or intent >= 0:  # loose condition for demo
         alert = Alert(
             workspace_id=ws,
             account_id=account.id,
@@ -570,6 +604,50 @@ def list_anon_visits(db: Session = Depends(get_db)):
 
 
 # ------------------------------------------------
+# PIXEL JS (anonymous public tracking)
+# ------------------------------------------------
+
+PIXEL_JS = """(function () {
+  function sendVisit() {
+    var payload = {
+      url: window.location.href,
+      referrer: document.referrer || null
+    };
+
+    try {
+      var blob = new Blob([JSON.stringify(payload)], { type: 'application/json' });
+      navigator.sendBeacon('/public/track', blob);
+    } catch (e) {
+      try {
+        fetch('/public/track', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+      } catch (err) {
+        // swallow
+      }
+    }
+  }
+
+  if (document.readyState === 'complete') {
+    sendVisit();
+  } else {
+    window.addEventListener('load', sendVisit);
+  }
+})();"""
+
+
+@app.get("/pixel.js", response_class=PlainTextResponse)
+def pixel_js() -> str:
+    """
+    Lightweight JS snippet to track anonymous visits via /public/track.
+    Safe to embed directly on websites.
+    """
+    return PIXEL_JS
+
+
+# ------------------------------------------------
 # TRACK (website/product intake with API key)
 # ------------------------------------------------
 
@@ -590,6 +668,34 @@ def track(
     url = payload.url
     metadata = payload.metadata or {}
 
+    # --- normalize tracking metadata for attribution ---
+    # Prefer explicit channel/UTM fields from payload, but keep metadata extensible.
+    if payload.channel:
+        metadata["channel"] = payload.channel
+
+    if payload.utm_source:
+        metadata["utm_source"] = payload.utm_source
+    if payload.utm_medium:
+        metadata["utm_medium"] = payload.utm_medium
+    if payload.utm_campaign:
+        metadata["utm_campaign"] = payload.utm_campaign
+    if payload.utm_term:
+        metadata["utm_term"] = payload.utm_term
+    if payload.utm_content:
+        metadata["utm_content"] = payload.utm_content
+
+    if payload.is_conversion:
+        metadata["is_conversion"] = True
+    if payload.revenue is not None:
+        metadata["revenue"] = payload.revenue
+
+    # Fill in referrer / user-agent if not passed in metadata
+    if "referrer" not in metadata:
+        metadata["referrer"] = request.headers.get("referer")
+    if not ua:
+        ua = request.headers.get("user-agent")
+
+    # IP enrichment
     ipinfo_data = resolve_ipinfo(ip) if ip else None
 
     country = ipinfo_data.get("country") if ipinfo_data else None
@@ -638,14 +744,21 @@ def track(
             .first()
         )
         if account:
+            event_channel = (
+                payload.channel
+                or metadata.get("channel")
+                or "website"
+            )
+
             event = Event(
                 workspace_id=ws,
                 account_id=account.id,
                 contact_id=payload.contact_id,
                 event_type=payload.event_type or "pageview",
-                source="website",
+                source=event_channel,
                 url=url,
                 event_metadata=metadata,
+                value=payload.revenue,  # may be None; used for attribution/ROI
             )
 
             event_intent, event_engagement, totals = score_event(
@@ -689,6 +802,7 @@ def track(
 # ------------------------------------------------
 # PUBLIC ANONYMOUS TRACKING (no API key)
 # ------------------------------------------------
+
 
 @app.post("/public/track")
 async def public_track(request: Request, db: Session = Depends(get_db)):
@@ -966,13 +1080,9 @@ def insights_competitors(db: Session = Depends(get_db)):
       - id, name
       - hitsCount
       - topAccounts: list of accounts with scores
-
-    For now we synthesize a single "Market competitors" group that
-    just reuses your top accounts.
     """
     ws = get_workspace_id()
 
-    # Reuse top accounts as "competitor hits"
     top_accounts = (
         db.query(Account)
         .filter(Account.workspace_id == ws)
@@ -1006,7 +1116,6 @@ def insights_competitors(db: Session = Depends(get_db)):
         "topAccounts": top_accounts_payload,
     }
 
-    # IMPORTANT: frontend expects `{ items: [...] }`
     return {"items": [competitor_obj]}
 
 
@@ -1021,20 +1130,15 @@ def insights_competitors(db: Session = Depends(get_db)):
     dependencies=[Depends(verify_api_key)],
 )
 def insights_pipeline(db: Session = Depends(get_db)):
-    """Return accounts with open pipeline + stage counts.
-
-    This powers the dashboard pipeline table and header stats.
-    """
+    """Return accounts with open pipeline + stage counts."""
     ws = get_workspace_id()
 
-    # Load all accounts for this workspace
     accounts = (
         db.query(Account)
         .filter(Account.workspace_id == ws)
         .all()
     )
 
-    # Aggregate open tasks per account
     from collections import defaultdict
 
     open_tasks_by_account = defaultdict(int)
@@ -1050,10 +1154,12 @@ def insights_pipeline(db: Session = Depends(get_db)):
     for acc_id, cnt in rows_tasks:
         open_tasks_by_account[acc_id] = cnt
 
-    # Aggregate open opportunity value per account
     open_value_by_account = defaultdict(float)
     rows_opps = (
-        db.query(Opportunity.account_id, func.coalesce(func.sum(Opportunity.amount), 0.0))
+        db.query(
+            Opportunity.account_id,
+            func.coalesce(func.sum(Opportunity.amount), 0.0),
+        )
         .filter(
             Opportunity.workspace_id == ws,
             Opportunity.status != "won",
@@ -1073,7 +1179,6 @@ def insights_pipeline(db: Session = Depends(get_db)):
         open_tasks = open_tasks_by_account.get(acc.id, 0)
         last_touch = acc.last_event_at
 
-        # We consider an account "with open pipeline" if it has open value OR open tasks
         if open_value > 0 or open_tasks > 0:
             total_open_accounts += 1
             total_open_value += open_value
@@ -1092,6 +1197,48 @@ def insights_pipeline(db: Session = Depends(get_db)):
         total_open_accounts=total_open_accounts,
         items=items,
     )
+
+
+# ------------------------------------------------
+# ANALYTICS: ATTRIBUTION & SEGMENTS
+# ------------------------------------------------
+
+
+@app.post(
+    "/analytics/attribution",
+    response_model=AttributionResponse,
+    dependencies=[Depends(verify_api_key)],
+)
+def analytics_attribution(
+    payload: AttributionRequest,
+    db: Session = Depends(get_db),
+):
+    """
+    Multi-channel attribution (first / last / linear) based on Event.source + revenue.
+
+    Uses Event.value and event_metadata["revenue"] / ["is_conversion"].
+    """
+    ws = get_workspace_id()
+    return multi_touch_attribution(db=db, workspace_id=ws, req=payload)
+
+
+@app.post(
+    "/analytics/segments",
+    response_model=SegmentationResponse,
+    dependencies=[Depends(verify_api_key)],
+)
+def analytics_segments(
+    payload: SegmentationRequest,
+    db: Session = Depends(get_db),
+):
+    """
+    Returns behavior + firmographic segments:
+      - Active_high_intent
+      - Low_intent
+      - Dormant
+    """
+    ws = get_workspace_id()
+    return segment_accounts(db=db, workspace_id=ws, req=payload)
 
 
 # ------------------------------------------------
@@ -1207,7 +1354,8 @@ def account_360(account_id: str, db: Session = Depends(get_db)):
 
     playbook_label = acc.buyer_stage or "unaware"
     enrichment_summary = (
-        f"{acc.name} in {acc.country or 'unknown country'} with intent score {acc.intent_score:.1f}."
+        f"{acc.name} in {acc.country or 'unknown country'} "
+        f"with intent score {acc.intent_score or 0.0:.1f}."
     )
 
     return Account360Response(
@@ -1233,22 +1381,43 @@ def account_360(account_id: str, db: Session = Depends(get_db)):
     )
 
 
-# -----------------------
-# CRM / Opportunities / Playbooks endpoints
-# -----------------------
+# ------------------------------------------------
+# INSIGHTS: NEXT BEST ACTION (AI)
+# ------------------------------------------------
 
-from models import CRMConnection, ExternalObjectMap, Opportunity, PlaybookRule
-from schemas import (
-    CRMAccountUpsert,
-    CRMContactUpsert,
-    CRMOpportunityUpsert,
-    OpportunityCreate,
-    OpportunityRead,
-    OpportunityUpdate,
-    PlaybookRuleCreate,
-    PlaybookRuleRead,
-    AccountRead,
+
+@app.get(
+    "/insights/next-best-actions/{account_id}",
+    dependencies=[Depends(verify_api_key)],
 )
+def insights_next_best_actions(
+    account_id: str,
+    db: Session = Depends(get_db),
+):
+    """
+    Dedicated Next-Best-Action endpoint powered by ai_scoring.generate_ai_insights.
+    """
+    ws = get_workspace_id()
+
+    account = (
+        db.query(Account)
+        .filter(Account.id == account_id, Account.workspace_id == ws)
+        .first()
+    )
+    if not account:
+        raise HTTPException(status_code=404, detail="Account not found")
+
+    insights = generate_ai_insights(db=db, account=account)
+
+    return {
+        "account_id": account_id,
+        "insights": insights,
+    }
+
+
+# -----------------------
+# CRM / Opportunities / Playbooks
+# -----------------------
 
 
 def _account_matches_rule(db: Session, account: Account, rule: PlaybookRule) -> bool:
@@ -1291,7 +1460,7 @@ def _account_matches_rule(db: Session, account: Account, rule: PlaybookRule) -> 
     return True
 
 
-def run_playbooks_for_account(db: Session, account: Account) -> None:
+def run_playbook_rules_for_account(db: Session, account: Account) -> None:
     """Evaluate playbook rules and create tasks/alerts."""
     rules = (
         db.query(PlaybookRule)
@@ -1306,7 +1475,6 @@ def run_playbooks_for_account(db: Session, account: Account) -> None:
         if not _account_matches_rule(db, account, rule):
             continue
 
-        # Actions
         if rule.create_task:
             title = rule.task_title_template or f"Follow up with {account.name}"
             task = Task(
@@ -1331,7 +1499,7 @@ def run_playbooks_for_account(db: Session, account: Account) -> None:
             )
             db.add(alert)
 
-        # push_to_crm would be handled later by a background worker or connector
+    db.commit()
 
 
 # -------- CRM Upserts --------
@@ -1360,13 +1528,17 @@ def crm_upsert_account(
         .first()
     )
 
+    account: Optional[Account] = None
     if mapping:
-        account = db.query(Account).filter(
-            Account.workspace_id == workspace_id,
-            Account.id == mapping.internal_id,
-        ).first()
+        account = (
+            db.query(Account)
+            .filter(
+                Account.workspace_id == workspace_id,
+                Account.id == mapping.internal_id,
+            )
+            .first()
+        )
         if not account:
-            # mapping is stale, treat as new
             mapping = None
 
     if not mapping:
@@ -1379,7 +1551,7 @@ def crm_upsert_account(
             industry=payload.industry,
         )
         db.add(account)
-        db.flush()  # get id
+        db.flush()
 
         mapping = ExternalObjectMap(
             workspace_id=workspace_id,
@@ -1391,7 +1563,6 @@ def crm_upsert_account(
         )
         db.add(mapping)
     else:
-        # update existing account
         if payload.name:
             account.name = payload.name
         account.domain = payload.domain or account.domain
@@ -1432,7 +1603,10 @@ def crm_upsert_contact(
             account_id = mapping.internal_id
 
     if not account_id:
-        raise HTTPException(status_code=400, detail="Unknown account_external_id for contact upsert")
+        raise HTTPException(
+            status_code=400,
+            detail="Unknown account_external_id for contact upsert",
+        )
 
     contact = (
         db.query(Contact)
@@ -1476,7 +1650,6 @@ def crm_upsert_opportunity(
 ):
     workspace_id = get_workspace_id()
 
-    # Find account by external id mapping
     account_mapping = (
         db.query(ExternalObjectMap)
         .filter(
@@ -1488,7 +1661,10 @@ def crm_upsert_opportunity(
         .first()
     )
     if not account_mapping:
-        raise HTTPException(status_code=400, detail="Unknown account_external_id for opportunity upsert")
+        raise HTTPException(
+            status_code=400,
+            detail="Unknown account_external_id for opportunity upsert",
+        )
 
     account_id = account_mapping.internal_id
 
@@ -1654,7 +1830,7 @@ def list_playbook_rules(
     "/accounts/{account_id}/run-playbooks",
     dependencies=[Depends(verify_api_key)],
 )
-def run_playbooks_for_account(
+def run_playbooks_for_account_endpoint(
     account_id: str,
     db: Session = Depends(get_db),
 ):
@@ -1668,10 +1844,55 @@ def run_playbooks_for_account(
     if not account:
         raise HTTPException(status_code=404, detail="Account not found")
 
-    created_tasks, created_alerts = evaluate_playbooks_for_account(db, account)
+    run_playbook_rules_for_account(db, account)
 
     return {
         "account_id": account.id,
-        "created_tasks": created_tasks,
-        "created_alerts": created_alerts,
+        "status": "ok",
     }
+
+
+# -------- CRM CSV Export --------
+
+
+@app.get(
+    "/crm/export.csv",
+    dependencies=[Depends(verify_api_key)],
+)
+def crm_export_csv(db: Session = Depends(get_db)):
+    """
+    Export contacts + linked account details as CSV for CRM upload.
+
+    Columns:
+      contact_id,contact_email,contact_name,account_id,account_name,
+      stage,country,owner,last_event_at
+    """
+    ws = get_workspace_id()
+
+    contacts = (
+        db.query(Contact)
+        .filter(Contact.workspace_id == ws)
+        .all()
+    )
+
+    fp = StringIO()
+    fp.write(
+        "contact_id,contact_email,contact_name,account_id,account_name,"
+        "stage,country,owner,last_event_at\n"
+    )
+
+    for c in contacts:
+        acc = c.account
+        last_seen = acc.last_event_at.isoformat() if acc and acc.last_event_at else ""
+        fp.write(
+            f"{c.id},{c.email or ''},{(c.name or '').replace(',', ' ')},"
+            f"{acc.id if acc else ''},{(acc.name or '').replace(',', ' ')},"
+            f"{acc.stage or ''},{acc.country or ''},{acc.owner or ''},{last_seen}\n"
+        )
+
+    csv_data = fp.getvalue()
+    return Response(
+        content=csv_data,
+        media_type="text/csv",
+        headers={"Content-Disposition": 'attachment; filename="crm_export.csv"'},
+    )
