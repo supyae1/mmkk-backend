@@ -164,11 +164,72 @@ class TrackEventPayload(ORMModel):
     account_id: Optional[str] = None
     contact_id: Optional[str] = None
     event_type: Optional[str] = "pageview"
+
+    # Network + context
     ip: Optional[str] = None
     user_agent: Optional[str] = None
     url: Optional[str] = None
+
+    # Free-form extra fields (custom properties, referrer, etc.)
     metadata: Optional[Dict[str, Any]] = None
 
+    # --- NEW: multi-channel + attribution fields ---
+    # “Channel” = where this came from: facebook_ads, google_ads, email, linkedin, etc.
+    channel: Optional[str] = None
+
+    # Standard UTM tags for multi-touch attribution
+    utm_source: Optional[str] = None
+    utm_medium: Optional[str] = None
+    utm_campaign: Optional[str] = None
+    utm_term: Optional[str] = None
+    utm_content: Optional[str] = None
+
+    # Revenue + conversion flags
+    revenue: Optional[float] = None          # e.g. booking value, contract value
+    is_conversion: bool = False              # True if this event is a conversion-touch
+
+# -----------------------
+# Attribution & Segmentation
+# -----------------------
+
+class AttributedChannel(BaseModel):
+    channel: str
+    first_touch_revenue: float = 0.0
+    last_touch_revenue: float = 0.0
+    linear_revenue: float = 0.0
+    conversions: int = 0
+
+
+class AttributionRequest(BaseModel):
+    account_id: Optional[str] = None   # if None, aggregate across all accounts in workspace
+    lookback_days: int = 90
+
+
+class AttributionResponse(BaseModel):
+    channels: List[AttributedChannel]
+
+
+class SegmentFilter(BaseModel):
+    # Behavioral
+    min_visits: Optional[int] = None          # minimum number of events
+    max_inactive_days: Optional[int] = None   # max days since last_event_at
+
+    # Firmographic
+    industries: Optional[List[str]] = None
+    stages: Optional[List[str]] = None        # pipeline stages
+
+
+class Segment(BaseModel):
+    segment_name: str
+    account_ids: List[str]
+
+
+class SegmentationRequest(BaseModel):
+    filters: SegmentFilter
+
+
+class SegmentationResponse(BaseModel):
+    segments: List[Segment]
 
 # -----------------------
 # Insights: Top Accounts
