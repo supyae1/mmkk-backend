@@ -1181,6 +1181,27 @@
     refreshAll();
   });
 </script>
+<script>
+(function () {
+  const API_KEY = "supersecret123";
+
+  fetch("http://localhost:8000/track", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-API-Key": API_KEY
+    },
+    body: JSON.stringify({
+      url: window.location.pathname,
+      user_agent: navigator.userAgent,
+      metadata: {
+        referrer: document.referrer || null
+      }
+    }),
+    keepalive: true
+  }).catch(() => {});
+})();
+</script>
 
 </body>
 </html>
