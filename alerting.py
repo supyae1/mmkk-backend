@@ -1,8 +1,8 @@
 import requests
 
 # Your Telegram bot credentials
-TELEGRAM_BOT_TOKEN = "8356111498:AAHG1S1huibK9zCTXAl15dBniUrTCSTfxG4"
-TELEGRAM_CHAT_ID = "7749487132"
+TELEGRAM_BOT_TOKEN = ""  # put your bot token if you want alerts
+TELEGRAM_CHAT_ID = ""    # your chat ID
 
 
 def send_telegram_alert(message: str):
