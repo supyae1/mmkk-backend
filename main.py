@@ -177,7 +177,7 @@ async def public_track(
     path = payload.get("path")
     referrer = payload.get("referrer")
     utm = payload.get("utm") or {}
-    metadata = payload.get("metadata") or {}
+    event_metadata = payload.get("metadata") or {}
 
     ip = payload.get("ip") or (request.client.host if request.client else None)
     user_agent = request.headers.get("user-agent")
@@ -198,7 +198,7 @@ async def public_track(
         ip=ip,
         utm=utm,
         channel=channel,
-        metadata=metadata,
+        event_metadata=event_metadata,
     )
     db.add(ev)
 
@@ -366,7 +366,7 @@ def activity_feed(
                 "referrer": e.referrer,
                 "channel": e.channel,
                 "utm": e.utm,
-                "metadata": e.metadata,
+                "metadata": e.event_metadata,
                 "created_at": e.created_at.isoformat() if e.created_at else None,
             }
             for e in events
