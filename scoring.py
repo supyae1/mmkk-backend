@@ -29,7 +29,7 @@ def _event_intent_weight(event: Event) -> float:
 
 
 def _event_engagement_weight(event: Event) -> float:
-    src = (event.source or "").lower()
+    src = (event.channel or "").lower()
     if src in {"paid_search", "paid_social"}:
         return 4.0
     if src in {"email"}:
@@ -56,7 +56,11 @@ def score_event(
 
     w_intent = _event_intent_weight(event)
     w_engagement = _event_engagement_weight(event)
-    revenue = float(event.value or 0.0)
+    meta = event.event_metadata or {}
+    try:
+        revenue = float(meta.get("value") or meta.get("revenue") or 0.0)
+    except Exception:
+        revenue = 0.0
 
     event_intent = w_intent + 0.1 * revenue
     event_engagement = w_engagement + 0.05 * revenue
