@@ -6,17 +6,13 @@ from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, ConfigDict
 
 
-# ------------------------------------------------
-# Base helper
-# ------------------------------------------------
-
 class ORMModel(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
-# ------------------------------------------------
+# -----------------------
 # Tracking
-# ------------------------------------------------
+# -----------------------
 
 class TrackEventPayload(ORMModel):
     account_id: Optional[str] = None
@@ -56,9 +52,9 @@ class AnonymousVisitRead(AnonymousVisitCreate):
     last_seen_at: datetime
 
 
-# ------------------------------------------------
+# -----------------------
 # Accounts & Contacts
-# ------------------------------------------------
+# -----------------------
 
 class AccountBase(ORMModel):
     name: str
@@ -116,9 +112,9 @@ class ContactRead(ContactBase):
     updated_at: datetime
 
 
-# ------------------------------------------------
+# -----------------------
 # Tasks & Alerts
-# ------------------------------------------------
+# -----------------------
 
 class TaskCreate(ORMModel):
     account_id: Optional[str] = None
@@ -151,9 +147,9 @@ class AlertRead(AlertCreate):
     updated_at: datetime
 
 
-# ------------------------------------------------
+# -----------------------
 # Insights
-# ------------------------------------------------
+# -----------------------
 
 class TopAccountItem(ORMModel):
     id: str
@@ -182,6 +178,8 @@ class ActivityFeedItem(ORMModel):
     url: Optional[str] = None
     value: Optional[float] = None
     created_at: datetime
+    account_name: Optional[str] = None
+    summary: Optional[str] = None
 
 
 class ActivityFeedResponse(ORMModel):
@@ -206,9 +204,9 @@ class Account360Response(ORMModel):
     ai_insights: Dict[str, Any]
 
 
-# ------------------------------------------------
+# -----------------------
 # CRM / Opportunities
-# ------------------------------------------------
+# -----------------------
 
 class CRMAccountUpsert(ORMModel):
     external_id: str
@@ -270,9 +268,9 @@ class OpportunityRead(OpportunityBase):
     updated_at: datetime
 
 
-# ------------------------------------------------
+# -----------------------
 # Attribution & Segmentation
-# ------------------------------------------------
+# -----------------------
 
 class AttributedChannel(BaseModel):
     channel: str
@@ -311,9 +309,9 @@ class SegmentationResponse(BaseModel):
     segments: List[Segment]
 
 
-# ------------------------------------------------
+# -----------------------
 # Playbooks
-# ------------------------------------------------
+# -----------------------
 
 class PlaybookRuleBase(ORMModel):
     name: str
