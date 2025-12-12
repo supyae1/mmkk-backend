@@ -55,17 +55,17 @@
   </div>
 
 <script>
-  const API_BASE = window.location.origin;
-  const API_KEY  = "supersecret123";
+  const API_BASE = window.location.origin;     // On Render: https://mmkk-backend.onrender.com
+  const API_KEY  = "supersecret123";          // Put your real key here (or read from env later)
 
   document.getElementById("apiBase").innerText = API_BASE;
-
-  // IMPORTANT: escape closing script tag inside JS string
   document.getElementById("pixelSnippet").innerText =
-    `<script src="${API_BASE}/pixel.js" data-api-key="${API_KEY}"><\\/script>`;
+`<script src="${API_BASE}/pixel.js" data-api-key="${API_KEY}"><\/script>`;
 
   async function apiGet(path) {
-    const res = await fetch(API_BASE + path, { headers: { "X-API-Key": API_KEY } });
+    const res = await fetch(API_BASE + path, {
+      headers: { "X-API-Key": API_KEY }
+    });
     if (!res.ok) throw new Error(await res.text());
     return res.json();
   }
