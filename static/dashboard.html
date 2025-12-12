@@ -2,1091 +2,143 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>Revenue Engine · Hotel & B2B Intent OS</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-
-  <!-- Tailwind CDN (ok for MVP demo; for production bundle Tailwind) -->
+  <title>Revenue Engine Dashboard</title>
   <script src="https://cdn.tailwindcss.com"></script>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-
-  <style>
-    :root { color-scheme: dark; }
-    body {
-      font-family: "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-    }
-    .card {
-      background: radial-gradient(circle at top left, rgba(80,160,255,.18), transparent 60%), rgba(12,16,36,0.96);
-      border: 1px solid rgba(148,163,184,0.18);
-      box-shadow: 0 18px 45px rgba(15,23,42,0.80);
-      backdrop-filter: blur(18px);
-    }
-    .chip {
-      border-radius: 999px;
-      border-width: 1px;
-      border-color: rgba(148,163,184,.35);
-      background: rgba(15,23,42,.9);
-      padding: 2px 10px;
-      font-size: 11px;
-      line-height: 1rem;
-    }
-    .pill {
-      border-radius: 999px;
-      font-size: 11px;
-      padding: 4px 10px;
-      font-weight: 500;
-    }
-    .pill-hot    { background: rgba(248,113,113,0.18); color: #fecaca; }
-    .pill-warm   { background: rgba(251,191,36,0.16); color: #facc15; }
-    .pill-cold   { background: rgba(56,189,248,0.18); color: #7dd3fc; }
-    .pill-unknown{ background: rgba(148,163,184,0.20); color: #e5e7eb;}
-    tr.data-row:hover {
-      background: linear-gradient(90deg, rgba(30,64,175,0.45), rgba(15,23,42,1));
-      cursor: pointer;
-    }
-    .fade-in { animation: fadeInUp 0.35s ease-out; }
-    @keyframes fadeInUp {
-      from { opacity: 0; transform: translateY(6px); }
-      to   { opacity: 1; transform: translateY(0); }
-    }
-    .thin-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
-    .thin-scrollbar::-webkit-scrollbar-track { background: transparent; }
-    .thin-scrollbar::-webkit-scrollbar-thumb {
-      background-color: rgba(148,163,184,0.7);
-      border-radius: 999px;
-    }
-    .step-card {
-      transition: transform 200ms ease, box-shadow 200ms ease, border-color 200ms ease, background 200ms ease;
-    }
-    .step-card:hover {
-      transform: translateY(-4px);
-      box-shadow: 0 20px 40px rgba(15,23,42,0.85);
-      border-color: rgba(248,250,252,0.35);
-      background: radial-gradient(circle at top left, rgba(96,165,250,0.25), transparent 55%), rgba(15,23,42,0.98);
-    }
-  </style>
 </head>
 
-<body class="bg-slate-950 text-slate-100 min-h-screen">
-<div class="min-h-screen flex flex-col">
-
-  <!-- Top Nav -->
-  <header class="border-b border-slate-800/80 bg-slate-950/95 backdrop-blur sticky top-0 z-30">
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 flex items-center justify-between gap-4">
-      <div class="flex items-center gap-3">
-        <div class="h-9 w-9 rounded-2xl bg-cyan-500/20 border border-cyan-400/40 flex items-center justify-center">
-          <span class="text-sm font-semibold tracking-tight text-cyan-300">RE</span>
-        </div>
-        <div>
-          <div class="text-sm font-semibold tracking-tight">Revenue Engine</div>
-          <div class="text-[11px] text-slate-400 uppercase tracking-[0.18em]">HOTEL &amp; B2B INTENT OS</div>
-        </div>
+<body class="bg-slate-950 text-slate-100">
+  <div class="max-w-6xl mx-auto p-6">
+    <div class="flex items-center justify-between gap-4">
+      <div>
+        <h1 class="text-2xl font-semibold">Revenue command centre</h1>
+        <p class="text-slate-400">Anon visits + signals + tracking verification.</p>
       </div>
 
-      <div class="flex items-center gap-4">
-        <div class="flex items-center gap-2 text-xs text-emerald-400">
-          <span class="h-2 w-2 rounded-full bg-emerald-400 animate-pulse"></span>
-          <span id="api-status-text">API online</span>
-        </div>
-        <button id="refresh-btn" class="pill pill-unknown border border-slate-600 hover:border-slate-300 hover:text-slate-50 transition">
-          ⟳ Refresh data
-        </button>
+      <div class="flex gap-2">
+        <button id="btnTest" class="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500">Send test event</button>
+        <button id="btnRefresh" class="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700">Refresh data</button>
       </div>
     </div>
-  </header>
 
-  <!-- Content -->
-  <main class="flex-1">
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+    <div class="mt-6 grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div class="rounded-xl bg-slate-900 p-4">
+        <div class="text-slate-400 text-sm">Anonymous visits</div>
+        <div id="anonCount" class="text-3xl font-bold mt-2">0</div>
+      </div>
+      <div class="rounded-xl bg-slate-900 p-4">
+        <div class="text-slate-400 text-sm">Events (last 200)</div>
+        <div id="eventCount" class="text-3xl font-bold mt-2">0</div>
+      </div>
+      <div class="rounded-xl bg-slate-900 p-4">
+        <div class="text-slate-400 text-sm">API base</div>
+        <div id="apiBase" class="text-sm mt-2 break-all text-slate-200"></div>
+      </div>
+    </div>
 
-      <!-- Title + view switch -->
-      <div class="flex flex-col md:flex-row md:items-end md:justify-between gap-4">
-        <div>
-          <h1 class="text-xl md:text-2xl font-semibold tracking-tight mb-1">Revenue command centre</h1>
-          <p class="text-sm text-slate-400 max-w-xl">
-            Single pane of glass for accounts, intent, competitors, alerts and pipeline.
-          </p>
-        </div>
-
-        <div class="flex items-center gap-2 bg-slate-900/70 border border-slate-700 rounded-full p-1">
-          <button id="tab-intent"
-                  class="px-3 py-1.5 text-xs rounded-full font-medium bg-slate-100 text-slate-900 shadow-sm">
-            Intent overview
-          </button>
-          <button id="tab-pipeline"
-                  class="px-3 py-1.5 text-xs rounded-full font-medium text-slate-300 hover:text-white">
-            Pipeline &amp; stages
-          </button>
-        </div>
+    <div class="mt-6 grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div class="rounded-xl bg-slate-900 p-4">
+        <h2 class="font-semibold">Anonymous visits</h2>
+        <div id="anonList" class="mt-3 space-y-2 text-sm text-slate-200"></div>
       </div>
 
-      <!-- KPI row -->
-      <section id="kpi-row" class="grid grid-cols-1 md:grid-cols-4 gap-4 fade-in">
-        <div class="card rounded-2xl p-4">
-          <div class="flex items-center justify-between mb-2">
-            <span class="text-xs font-medium text-slate-400 uppercase tracking-[0.16em]">Accounts tracked</span>
-          </div>
-          <div class="flex items-baseline gap-2">
-            <span id="kpi-accounts" class="text-2xl font-semibold">–</span>
-            <span class="text-xs text-slate-400">with at least one signal</span>
-          </div>
-        </div>
-
-        <div class="card rounded-2xl p-4">
-          <div class="text-xs font-medium text-slate-400 uppercase tracking-[0.16em] mb-2">Hot / warm in market</div>
-          <div class="flex items-center gap-6">
-            <div>
-              <div class="text-[11px] text-slate-400 mb-0.5">Hot</div>
-              <div id="kpi-hot" class="text-lg font-semibold text-rose-300">0</div>
-            </div>
-            <div>
-              <div class="text-[11px] text-slate-400 mb-0.5">Warm</div>
-              <div id="kpi-warm" class="text-lg font-semibold text-amber-300">0</div>
-            </div>
-          </div>
-        </div>
-
-        <div class="card rounded-2xl p-4">
-          <div class="flex items-center justify-between mb-2">
-            <span class="text-xs font-medium text-slate-400 uppercase tracking-[0.16em]">Playbook coverage</span>
-          </div>
-          <div class="flex items-baseline gap-2 mb-1">
-            <span id="kpi-playbook" class="text-2xl font-semibold">0%</span>
-          </div>
-          <p class="text-[11px] text-slate-400 max-w-xs">% of in-market accounts covered by automation (tasks + CRM sync).</p>
-        </div>
-
-        <div class="card rounded-2xl p-4">
-          <div class="flex items-center justify-between mb-2">
-            <span class="text-xs font-medium text-slate-400 uppercase tracking-[0.16em]">Alerts &amp; risk</span>
-          </div>
-          <div class="flex items-center justify-between mb-1">
-            <div>
-              <div class="text-[11px] text-slate-400 mb-0.5">Open alerts</div>
-              <div id="kpi-alerts-open" class="text-lg font-semibold text-amber-200">0</div>
-            </div>
-            <div class="text-right">
-              <div class="text-[11px] text-slate-400 mb-0.5">High severity</div>
-              <div id="kpi-alerts-high" class="text-lg font-semibold text-rose-300">0</div>
-            </div>
-          </div>
-          <p class="text-[11px] text-slate-400">Generated from thresholds in scoring &amp; playbooks.</p>
-        </div>
-      </section>
-
-      <!-- Explainer strip (4 steps) -->
-      <section class="fade-in">
-        <div class="grid grid-cols-1 md:grid-cols-4 gap-3">
-          <div class="card step-card rounded-2xl p-4 flex flex-col gap-2">
-            <div class="flex items-center gap-2">
-              <span class="text-lg">1️⃣</span>
-              <span class="text-xs font-semibold tracking-wide uppercase text-slate-300">Connect</span>
-            </div>
-            <div class="text-[13px] font-medium">Connect website &amp; CRM</div>
-            <p class="text-[11px] text-slate-400">
-              Drop a script on your site and send <code class="bg-slate-900 px-1 rounded text-[10px]">/events</code> and
-              <code class="bg-slate-900 px-1 rounded text-[10px]">/track</code> from forms, booking flows and email clicks.
-            </p>
-          </div>
-
-          <div class="card step-card rounded-2xl p-4 flex flex-col gap-2">
-            <div class="flex items-center gap-2">
-              <span class="text-lg">2️⃣</span>
-              <span class="text-xs font-semibold tracking-wide uppercase text-slate-300">Score</span>
-            </div>
-            <div class="text-[13px] font-medium">Score every signal</div>
-            <p class="text-[11px] text-slate-400">
-              The engine scores intent, fit, engagement and journey per account using your custom model in
-              <code class="bg-slate-900 px-1 rounded text-[10px]">scoring.py</code>.
-            </p>
-          </div>
-
-          <div class="card step-card rounded-2xl p-4 flex flex-col gap-2">
-            <div class="flex items-center gap-2">
-              <span class="text-lg">3️⃣</span>
-              <span class="text-xs font-semibold tracking-wide uppercase text-slate-300">Reveal</span>
-            </div>
-            <div class="text-[13px] font-medium">Reveal in-market accounts</div>
-            <p class="text-[11px] text-slate-400">
-              Top accounts, anonymous web, competitor hits and pipeline all roll up into this canvas so reps know who to call first.
-            </p>
-          </div>
-
-          <div class="card step-card rounded-2xl p-4 flex flex-col gap-2">
-            <div class="flex items-center gap-2">
-              <span class="text-lg">4️⃣</span>
-              <span class="text-xs font-semibold tracking-wide uppercase text-slate-300">Automate</span>
-            </div>
-            <div class="text-[13px] font-medium">Trigger playbooks</div>
-            <p class="text-[11px] text-slate-400">
-              Playbooks fire tasks, alerts and CRM sync when thresholds are hit. 6sense + ZoomInfo in one lightweight engine.
-            </p>
-          </div>
-        </div>
-      </section>
-
-      <!-- Daily digest -->
-      <section class="fade-in">
-        <div class="card rounded-2xl p-4 flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div>
-            <div class="text-[11px] font-semibold text-slate-400 uppercase tracking-[0.16em] mb-1">What changed today</div>
-            <div id="digest-main-line" class="text-sm text-slate-100">Waiting for signals…</div>
-            <div id="digest-extra" class="text-[11px] text-slate-400 mt-1">Based on last 24h of activity vs. previous 24h.</div>
-          </div>
-          <div class="flex items-center gap-6 text-xs">
-            <div class="text-right">
-              <div class="text-[11px] text-slate-400 mb-0.5">Events in last 24h</div>
-              <div id="digest-events-today" class="text-lg font-semibold text-sky-300">0</div>
-            </div>
-            <div class="text-right">
-              <div class="text-[11px] text-slate-400 mb-0.5">Accounts active today</div>
-              <div id="digest-accounts-today" class="text-lg font-semibold text-emerald-300">0</div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <!-- INTENT OVERVIEW -->
-      <section id="view-intent" class="space-y-5 fade-in">
-        <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
-
-          <!-- Accounts table -->
-          <div class="card rounded-2xl p-4 lg:col-span-2 flex flex-col">
-            <div class="flex items-center justify-between mb-3 gap-2">
-              <div>
-                <h2 class="text-sm font-semibold">Accounts ranked by intent</h2>
-                <p class="text-xs text-slate-400">Click a row to see the full 360° context, signals and tasks.</p>
-              </div>
-              <div class="hidden md:flex items-center gap-2 text-[11px] text-slate-400">
-                <span class="chip">Focus: All tiers</span>
-              </div>
-            </div>
-
-            <div class="overflow-hidden rounded-xl border border-slate-800/80 thin-scrollbar">
-              <table class="min-w-full text-xs">
-                <thead class="bg-slate-900/80 text-slate-400 text-[11px] uppercase tracking-[0.12em]">
-                  <tr>
-                    <th class="px-3 py-2 text-left font-medium">Account</th>
-                    <th class="px-3 py-2 text-left font-medium">Intent</th>
-                    <th class="px-3 py-2 text-left font-medium">Heat</th>
-                    <th class="px-3 py-2 text-left font-medium">Journey</th>
-                    <th class="px-3 py-2 text-left font-medium">Last signal</th>
-                  </tr>
-                </thead>
-                <tbody id="accounts-table" class="divide-y divide-slate-800/80 bg-slate-950/70"></tbody>
-              </table>
-            </div>
-          </div>
-
-          <!-- Account 360 -->
-          <div class="card rounded-2xl p-4 flex flex-col gap-3 min-h-[280px]" id="account-360-empty">
-            <div class="flex items-center justify-between">
-              <div>
-                <h2 class="text-sm font-semibold mb-0.5">Account 360</h2>
-                <p class="text-xs text-slate-400">Select an account on the left to open the full picture.</p>
-              </div>
-            </div>
-            <div class="flex-1 flex items-center justify-center text-xs text-slate-500">No account selected yet.</div>
-          </div>
-
-          <div class="card rounded-2xl p-4 hidden flex-col gap-3 min-h-[280px]" id="account-360-card">
-            <div class="flex items-start justify-between gap-3">
-              <div>
-                <div class="text-[11px] text-slate-400 mb-0.5">ACCOUNT 360</div>
-                <div id="acc360-name" class="text-sm font-semibold">–</div>
-                <div id="acc360-meta" class="text-[11px] text-slate-400">–</div>
-                <div id="acc360-playbook" class="text-[11px] text-slate-300 mt-1"></div>
-              </div>
-              <div class="flex flex-col items-end gap-1">
-                <div class="pill pill-unknown" id="acc360-stage-pill">Stage: –</div>
-                <div class="pill pill-unknown" id="acc360-buyer-pill">Journey: –</div>
-              </div>
-            </div>
-
-            <div class="grid grid-cols-2 gap-3 text-xs mt-2">
-              <div class="bg-slate-900/70 rounded-xl p-3">
-                <div class="text-[11px] text-slate-400 mb-1">Intent score</div>
-                <div class="text-xl font-semibold text-emerald-300" id="acc360-intent">–</div>
-                <div class="text-[11px] text-slate-400" id="acc360-engagement">Engagement: –</div>
-              </div>
-              <div class="bg-slate-900/70 rounded-xl p-3">
-                <div class="text-[11px] text-slate-400 mb-1">Fit &amp; risk</div>
-                <div class="flex items-baseline gap-2 mb-1">
-                  <span class="text-lg font-semibold" id="acc360-fit">–</span>
-                  <span class="text-[11px] text-slate-400" id="acc360-grade">–</span>
-                </div>
-                <div class="text-[11px] text-slate-400" id="acc360-risk">Risk: –</div>
-              </div>
-            </div>
-
-            <div class="grid grid-cols-2 gap-3 text-xs mt-1">
-              <div class="bg-slate-900/70 rounded-xl p-3">
-                <div class="text-[11px] text-slate-400 mb-1">Next-best action</div>
-                <div id="acc360-nba" class="text-[11px] text-slate-100 leading-snug"></div>
-                <div id="acc360-nba-reason" class="text-[11px] text-slate-400 mt-1"></div>
-              </div>
-              <div class="bg-slate-900/70 rounded-xl p-3">
-                <div class="text-[11px] text-slate-400 mb-1">Pipeline / workload</div>
-                <div class="flex items-center justify-between">
-                  <div>
-                    <div class="text-[11px] text-slate-400 mb-0.5">Pipeline</div>
-                    <div id="acc360-pipeline" class="text-sm font-semibold">–</div>
-                  </div>
-                  <div class="text-right">
-                    <div class="text-[11px] text-slate-400 mb-0.5">Tasks &amp; alerts</div>
-                    <div id="acc360-tasks" class="text-sm font-semibold">–</div>
-                  </div>
-                </div>
-                <div class="text-[11px] text-slate-400 mt-1" id="acc360-firmo">–</div>
-              </div>
-            </div>
-
-            <div class="grid grid-cols-2 gap-3 text-xs mt-1">
-              <div class="bg-slate-900/70 rounded-xl p-3 thin-scrollbar max-h-24 overflow-y-auto">
-                <div class="text-[11px] text-slate-400 mb-1">Signals mix</div>
-                <div id="acc360-signals" class="flex flex-wrap gap-1"></div>
-              </div>
-              <div class="bg-slate-900/70 rounded-xl p-3 thin-scrollbar max-h-24 overflow-y-auto">
-                <div class="text-[11px] text-slate-400 mb-1">Contacts &amp; anon</div>
-                <div class="text-[11px] text-slate-100" id="acc360-contacts-summary">–</div>
-                <div class="text-[11px] text-slate-400 mt-1" id="acc360-anon-summary">–</div>
-              </div>
-            </div>
-
-            <div class="bg-slate-900/70 rounded-xl p-3 text-[11px] space-y-1 max-h-28 overflow-y-auto thin-scrollbar">
-              <div class="text-slate-400 mb-0.5">Story so far</div>
-              <p id="acc360-story" class="text-slate-100"></p>
-            </div>
-
-            <div class="bg-slate-900/70 rounded-xl p-3 text-[11px] space-y-1 max-h-32 overflow-y-auto thin-scrollbar">
-              <div class="flex items-center justify-between mb-1">
-                <span class="text-slate-400">Recent signals</span>
-                <span class="text-slate-500 text-[10px]" id="acc360-events-count"></span>
-              </div>
-              <div id="acc360-recent" class="space-y-1"></div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Bottom row -->
-        <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 fade-in">
-          <div class="card rounded-2xl p-4 lg:col-span-2 flex flex-col">
-            <div class="flex items-center justify-between mb-3">
-              <div>
-                <h2 class="text-sm font-semibold">Live activity feed</h2>
-                <p class="text-xs text-slate-400">Most recent scored signals and actions across your accounts.</p>
-              </div>
-            </div>
-            <div class="overflow-hidden rounded-xl border border-slate-800/80 thin-scrollbar">
-              <table class="min-w-full text-xs">
-                <thead class="bg-slate-900/80 text-slate-400 text-[11px] uppercase tracking-[0.12em]">
-                  <tr>
-                    <th class="px-3 py-2 text-left font-medium">When</th>
-                    <th class="px-3 py-2 text-left font-medium">Account</th>
-                    <th class="px-3 py-2 text-left font-medium">Event</th>
-                    <th class="px-3 py-2 text-left font-medium">Summary</th>
-                  </tr>
-                </thead>
-                <tbody id="activity-table" class="divide-y divide-slate-800/80 bg-slate-950/70"></tbody>
-              </table>
-            </div>
-          </div>
-
-          <div class="space-y-3">
-            <div class="card rounded-2xl p-4">
-              <div class="flex items-center justify-between mb-2">
-                <div>
-                  <h2 class="text-sm font-semibold mb-0.5">Anonymous web</h2>
-                  <p class="text-xs text-slate-400">Latest anonymous sessions from <code class="bg-slate-900 px-1 rounded text-[10px]">/public/track</code>.</p>
-                </div>
-              </div>
-              <div id="anon-list" class="text-[11px] text-slate-300 space-y-1 max-h-28 overflow-y-auto thin-scrollbar">
-                <div class="text-slate-500">No anonymous sessions yet.</div>
-              </div>
-            </div>
-
-            <div class="card rounded-2xl p-4">
-              <div class="flex items-center justify-between mb-2">
-                <div>
-                  <h2 class="text-sm font-semibold mb-0.5">Competitor intelligence</h2>
-                  <p class="text-xs text-slate-400">Which competitor pages your accounts are researching.</p>
-                </div>
-              </div>
-              <div id="comp-list" class="text-[11px] text-slate-300 space-y-1 max-h-28 overflow-y-auto thin-scrollbar">
-                <div class="text-slate-500">No competitor activity yet.</div>
-              </div>
-            </div>
-
-            <div class="card rounded-2xl p-4">
-              <div class="flex items-center justify-between mb-2">
-                <div>
-                  <h2 class="text-sm font-semibold mb-0.5">Alerts centre</h2>
-                  <p class="text-xs text-slate-400">System-generated alerts from scoring &amp; playbooks.</p>
-                </div>
-              </div>
-              <div id="alerts-list" class="text-[11px] text-slate-300 space-y-1 max-h-32 overflow-y-auto thin-scrollbar">
-                <div class="text-slate-500">No alerts yet.</div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <!-- PIPELINE VIEW -->
-      <section id="view-pipeline" class="hidden space-y-4 fade-in">
-        <div class="card rounded-2xl p-4 flex flex-col md:flex-row md:items-center justify-between gap-3">
-          <div>
-            <h2 class="text-sm font-semibold mb-1">Pipeline &amp; deal stages</h2>
-            <p class="text-xs text-slate-400 max-w-xl">Where money is sitting by stage, plus open work on each account.</p>
-          </div>
-          <div class="flex items-center gap-4 text-xs">
-            <div class="text-right">
-              <div class="text-slate-400 mb-0.5">Total open pipeline</div>
-              <div id="pipe-total" class="text-lg font-semibold text-emerald-300">–</div>
-            </div>
-            <div class="text-right">
-              <div class="text-slate-400 mb-0.5">Accounts with pipeline</div>
-              <div id="pipe-accounts" class="text-lg font-semibold text-sky-300">–</div>
-            </div>
-          </div>
-        </div>
-
-        <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
-          <div class="card rounded-2xl p-4 lg:col-span-2 flex flex-col">
-            <div class="flex items-center justify-between mb-3">
-              <h3 class="text-sm font-semibold">Accounts with open pipeline</h3>
-              <span class="text-[11px] text-slate-400">Sorted by value &amp; last touch</span>
-            </div>
-            <div class="overflow-hidden rounded-xl border border-slate-800/80 thin-scrollbar">
-              <table class="min-w-full text-xs">
-                <thead class="bg-slate-900/80 text-slate-400 text-[11px] uppercase tracking-[0.12em]">
-                  <tr>
-                    <th class="px-3 py-2 text-left font-medium">Account</th>
-                    <th class="px-3 py-2 text-left font-medium">Pipeline</th>
-                    <th class="px-3 py-2 text-left font-medium">Open tasks</th>
-                    <th class="px-3 py-2 text-left font-medium">Last touch</th>
-                  </tr>
-                </thead>
-                <tbody id="pipeline-table" class="divide-y divide-slate-800/80 bg-slate-950/70"></tbody>
-              </table>
-            </div>
-          </div>
-
-          <div class="card rounded-2xl p-4 flex flex-col">
-            <h3 class="text-sm font-semibold mb-2">Stage health</h3>
-            <p class="text-xs text-slate-400 mb-3">How many accounts sit in each stage based on last intent and touch.</p>
-            <div id="stage-list" class="space-y-2 text-xs"></div>
-          </div>
-        </div>
-      </section>
-
+      <div class="rounded-xl bg-slate-900 p-4">
+        <h2 class="font-semibold">Activity feed</h2>
+        <div id="feedList" class="mt-3 space-y-2 text-sm text-slate-200"></div>
+      </div>
     </div>
-  </main>
-</div>
+
+    <div class="mt-6 rounded-xl bg-slate-900 p-4">
+      <h2 class="font-semibold">Website pixel snippet (install on client website)</h2>
+      <pre class="mt-2 p-3 rounded-lg bg-slate-950 text-slate-200 overflow-auto text-xs"><code id="pixelSnippet"></code></pre>
+    </div>
+  </div>
 
 <script>
-  // Works on Render + Local (same-origin)
-  const API_BASE = window.location.origin;
-  const API_KEY = "supersecret123";
+  const API_BASE = window.location.origin;     // On Render: https://mmkk-backend.onrender.com
+  const API_KEY  = "supersecret123";          // Put your real key here (or read from env later)
 
-  // store for daily digest
-  let __activityItems = [];
+  document.getElementById("apiBase").innerText = API_BASE;
+  document.getElementById("pixelSnippet").innerText =
+`<script src="${API_BASE}/pixel.js" data-api-key="${API_KEY}"></script>`;
 
-  function normItems(data) {
-    // endpoints may return [] or {items: []}
-    if (Array.isArray(data)) return data;
-    if (data && Array.isArray(data.items)) return data.items;
-    return [];
-  }
-
-  function formatMoney(value) {
-    if (value === null || value === undefined) return "–";
-    const n = Number(value);
-    if (Number.isNaN(n)) return "–";
-    if (n >= 1_000_000) return "$" + (n / 1_000_000).toFixed(1) + "M";
-    if (n >= 1_000) return "$" + (n / 1_000).toFixed(1) + "k";
-    return "$" + n.toLocaleString();
-  }
-
-  function formatDateTime(value) {
-    if (!value) return "–";
-    const d = new Date(value);
-    if (Number.isNaN(d.getTime())) return "–";
-    return d.toLocaleString();
-  }
-
-  function formatRelativeTime(value) {
-    if (!value) return "–";
-    const t = new Date(value).getTime();
-    if (Number.isNaN(t)) return "–";
-    const diff = Date.now() - t;
-    const s = Math.floor(diff / 1000);
-    if (s < 10) return "just now";
-    if (s < 60) return `${s}s ago`;
-    const m = Math.floor(s / 60);
-    if (m < 60) return `${m}m ago`;
-    const h = Math.floor(m / 60);
-    if (h < 24) return `${h}h ago`;
-    const d = Math.floor(h / 24);
-    return `${d}d ago`;
-  }
-
-  async function apiCall(path, { method = "GET", json, auth = true } = {}) {
-    const headers = { "Accept": "application/json" };
-    if (auth) headers["X-API-Key"] = API_KEY;
-    if (json !== undefined) headers["Content-Type"] = "application/json";
-
+  async function apiGet(path) {
     const res = await fetch(API_BASE + path, {
-      method,
-      headers,
-      body: json !== undefined ? JSON.stringify(json) : undefined,
+      headers: { "X-API-Key": API_KEY }
     });
-
-    if (!res.ok) {
-      console.error("HTTP", res.status, path);
-      throw new Error("HTTP " + res.status + ": " + path);
-    }
-
-    // some endpoints might return CSV etc. Only JSON here.
+    if (!res.ok) throw new Error(await res.text());
     return res.json();
   }
 
-  function pillForHeatTier(tier) {
-    const t = (tier || "").toString().toLowerCase();
-    if (t.includes("hot")) return "pill pill-hot";
-    if (t.includes("warm")) return "pill pill-warm";
-    if (t.includes("cold")) return "pill pill-cold";
-    return "pill pill-unknown";
-  }
-
-  function pillForStage(stage) {
-    const s = (stage || "").toString().toLowerCase();
-    if (s.includes("decision")) return "pill pill-hot";
-    if (s.includes("consideration") || s.includes("proposal") || s.includes("demo")) return "pill pill-warm";
-    if (s.includes("aware") || s.includes("research")) return "pill pill-cold";
-    return "pill pill-unknown";
-  }
-
-  // ---------- Daily digest from activity feed ----------
-  function updateDailyDigest() {
-    const now = Date.now();
-    const oneDay = 24 * 60 * 60 * 1000;
-    const todayItems = [];
-    const previousItems = [];
-
-    (__activityItems || []).forEach((item) => {
-      if (!item.created_at) return;
-      const t = new Date(item.created_at).getTime();
-      if (Number.isNaN(t)) return;
-      if (now - t <= oneDay) todayItems.push(item);
-      else if (now - t <= 2 * oneDay) previousItems.push(item);
+  async function apiPost(path, body) {
+    const res = await fetch(API_BASE + path, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-API-Key": API_KEY },
+      body: JSON.stringify(body)
     });
-
-    const eventsToday = todayItems.length;
-    const eventsPrev = previousItems.length;
-
-    const accountsToday = new Set(
-      todayItems.map((i) => i.account_id || null).filter(Boolean)
-    ).size;
-
-    document.getElementById("digest-events-today").textContent = String(eventsToday);
-    document.getElementById("digest-accounts-today").textContent = String(accountsToday);
-
-    const headlineEl = document.getElementById("digest-main-line");
-    const extraEl = document.getElementById("digest-extra");
-
-    if (eventsToday === 0 && eventsPrev === 0) {
-      headlineEl.textContent = "Waiting for signals...";
-      extraEl.textContent = "Based on last 24h of activity vs. previous 24h.";
-      return;
-    }
-
-    if (eventsToday === 0 && eventsPrev > 0) {
-      headlineEl.textContent = "Quieter day so far – no new signals in the last 24h.";
-      extraEl.textContent = "You had activity yesterday. Keep an eye on high-intent accounts.";
-      return;
-    }
-
-    if (eventsToday >= eventsPrev) {
-      headlineEl.textContent = `Good news – ${eventsToday} signals in the last 24h (same or higher vs. yesterday).`;
-      extraEl.textContent = "Focus on the hottest accounts first based on intent and journey stage.";
-    } else {
-      headlineEl.textContent = `You have ${eventsToday} signals in the last 24h, a bit lower than yesterday.`;
-      extraEl.textContent = "Use the hot accounts and pipeline views to prioritise your outreach.";
-    }
+    if (!res.ok) throw new Error(await res.text());
+    return res.json();
   }
 
-  // ---------- Loaders ----------
-  async function loadTopAccounts() {
-    try {
-      const data = await apiCall("/insights/top-accounts?limit=50");
-      const items = normItems(data);
-
-      const tbody = document.getElementById("accounts-table");
-      tbody.innerHTML = "";
-
-      let hot = 0, warm = 0;
-
-      document.getElementById("kpi-accounts").textContent = String(items.length);
-
-      items.forEach(acc => {
-        const tier = (acc.intent_tier || "unknown").toString();
-        const journey = (acc.buyer_stage || "Unknown").toString();
-
-        const tr = document.createElement("tr");
-        tr.className = "data-row";
-
-        tr.innerHTML = `
-          <td class="px-3 py-2">
-            <div class="text-[13px] font-medium">${acc.name || "—"}</div>
-            <div class="text-[11px] text-slate-400">${acc.domain || ""}</div>
-          </td>
-          <td class="px-3 py-2 align-top">
-            <div class="flex items-center gap-2">
-              <span class="text-sm font-semibold">${Math.round(acc.intent_score || 0)}</span>
-              <span class="text-[11px] text-slate-400">score</span>
-            </div>
-          </td>
-          <td class="px-3 py-2 align-top">
-            <span class="${pillForHeatTier(tier)}">${tier.replace(/_/g, " ")}</span>
-          </td>
-          <td class="px-3 py-2 align-top">
-            <span class="${pillForStage(journey)}">${journey}</span>
-          </td>
-          <td class="px-3 py-2 align-top">
-            <span class="text-[11px] text-slate-400">
-              ${acc.last_event_at ? formatRelativeTime(acc.last_event_at) : "No signals yet"}
-            </span>
-          </td>
-        `;
-
-        const t = tier.toLowerCase();
-        if (t.includes("hot")) hot += 1;
-        else if (t.includes("warm")) warm += 1;
-
-        tr.addEventListener("click", () => loadAccount360(acc.id, acc.name));
-        tbody.appendChild(tr);
-      });
-
-      document.getElementById("kpi-hot").textContent = String(hot);
-      document.getElementById("kpi-warm").textContent = String(warm);
-
-    } catch (e) {
-      console.error("loadTopAccounts failed", e);
-    }
-  }
-
-  async function loadPlaybookCoverage() {
-    try {
-      const cov = await apiCall("/insights/playbook-coverage");
-      const pct = (cov && cov.coverage_pct != null) ? Number(cov.coverage_pct) : 0;
-      document.getElementById("kpi-playbook").textContent = `${Math.round(pct)}%`;
-    } catch (e) {
-      console.warn("Playbook coverage failed", e);
-    }
-  }
-
-  async function loadActivityFeed() {
-    const data = await apiCall("/insights/activity-feed");
-    __activityItems = normItems(data);
-
-    const tbody = document.getElementById("activity-table");
-    tbody.innerHTML = "";
-
-    __activityItems.forEach(item => {
-      const tr = document.createElement("tr");
-      tr.className = "bg-slate-950/70";
-
-      tr.innerHTML = `
-        <td class="px-3 py-2 text-[11px] text-slate-400">${formatDateTime(item.created_at)}</td>
-        <td class="px-3 py-2 text-[11px]">
-          <div class="text-[12px] font-medium">${item.account_name || "—"}</div>
-        </td>
-        <td class="px-3 py-2 text-[11px] text-slate-200">${item.type || "—"}</td>
-        <td class="px-3 py-2 text-[11px] text-slate-300 truncate max-w-[260px]">${item.summary || ""}</td>
-      `;
-      tbody.appendChild(tr);
-    });
-
-    updateDailyDigest();
-  }
-
-  async function loadAnonVisits() {
-    const data = await apiCall("/insights/anon-visits");
-    const rows = normItems(data);
-
-    const container = document.getElementById("anon-list");
-    container.innerHTML = "";
-
-    if (!rows.length) {
-      container.innerHTML = `<div class="text-slate-500 text-[11px]">No anonymous sessions yet.</div>`;
-      return;
-    }
-
-    rows.slice(0, 12).forEach(v => {
-      const div = document.createElement("div");
-      div.className = "flex items-start justify-between gap-2 border-b border-slate-800/80 last:border-none pb-1.5";
-      div.innerHTML = `
-        <div>
-          <div class="text-[11px] text-slate-200">${v.session_id || v.id || "session"}</div>
-          <div class="text-[11px] text-slate-400">${v.url || ""}</div>
-          <div class="text-[11px] text-slate-500">${v.referrer || ""}</div>
-        </div>
-        <div class="text-[10px] text-slate-400">${formatDateTime(v.created_at)}</div>
-      `;
-      container.appendChild(div);
-    });
-  }
-
-  async function loadCompetitors() {
-    let data;
-    try {
-      data = await apiCall("/insights/competitors");
-    } catch (e) {
-      console.warn("Competitor endpoint failed", e);
-      const container = document.getElementById("comp-list");
-      container.innerHTML = '<div class="text-[11px] text-slate-500">Competitor feature is disabled.</div>';
-      return;
-    }
-
-    const container = document.getElementById("comp-list");
-    container.innerHTML = "";
-
-    let rows = normItems(data);
-
-    if (!rows.length) {
-      container.innerHTML = '<div class="text-[11px] text-slate-500">No competitor activity yet.</div>';
-      return;
-    }
-
-    rows.slice(0, 10).forEach((row) => {
-      const c = row && (row.competitor || row.account || row);
-
-      if (!c || !c.name) return;
-
-      const name = c.name;
-      const domain = c.domain || c.website || "";
-      const hits = row.hits_count || row.hitsCount || row.events_count || 0;
-      const lastSeen = row.last_seen || row.lastSeen || row.last_event_at || null;
-
-      const div = document.createElement("div");
-      div.className = "flex items-start justify-between gap-2 border-b border-slate-800/80 last:border-none pb-1.5";
-      div.innerHTML = `
-        <div>
-          <div class="text-[11px] text-slate-200">${name}</div>
-          <div class="text-[11px] text-slate-400">${domain}</div>
-          <div class="text-[11px] text-slate-500">Hits: ${hits} · Last seen: ${lastSeen ? formatDateTime(lastSeen) : "–"}</div>
-        </div>
-        <span class="chip text-[10px]">intel</span>
-      `;
-      if (c.id) div.addEventListener("click", () => loadAccount360(c.id, name));
-      container.appendChild(div);
-    });
-  }
-
-  async function loadAlerts() {
-    let data;
-    try {
-      data = await apiCall("/alerts");
-    } catch (e) {
-      console.warn("Alerts endpoint failed", e);
-      document.getElementById("alerts-list").innerHTML =
-        `<div class="text-slate-500 text-[11px]">Alerts feature is disabled.</div>`;
-      return;
-    }
-
-    // normalize possible shapes
-    let raw = normItems(data);
-
-    // If backend returns simple alerts already:
-    const items = raw.map(row => {
-      if (row && row.alert) return row;
-      return {
-        alert: {
-          id: row.id,
-          title: row.title,
-          body: row.body,
-          severity: row.severity || "high",
-          status: row.status || "open",
-          created_at: row.created_at,
-        },
-        account: row.account || null,
-      };
-    });
-
-    const openAlerts = items.filter(x => (x.alert.status || "open") !== "closed");
-    const highAlerts = openAlerts.filter(x => (x.alert.severity || "").toLowerCase() === "high");
-
-    document.getElementById("kpi-alerts-open").textContent = String(openAlerts.length);
-    document.getElementById("kpi-alerts-high").textContent = String(highAlerts.length);
-
-    const container = document.getElementById("alerts-list");
-    container.innerHTML = "";
-
-    if (!items.length) {
-      container.innerHTML = `<div class="text-slate-500 text-[11px]">No alerts yet.</div>`;
-      return;
-    }
-
-    items.slice(0, 10).forEach(row => {
-      const a = row.alert;
-      const sev = (a.severity || "normal").toLowerCase();
-      let sevColor = "text-slate-300";
-      if (sev === "high") sevColor = "text-rose-300";
-      else if (sev === "medium") sevColor = "text-amber-300";
-
-      const div = document.createElement("div");
-      div.className = "border-b border-slate-800/80 last:border-none pb-1.5";
-      div.innerHTML = `
-        <div class="flex items-center justify-between gap-2">
-          <div class="text-[11px] font-medium text-slate-100">${a.title || "Alert"}</div>
-          <span class="text-[10px] ${sevColor} capitalize">${sev}</span>
-        </div>
-        <div class="text-[11px] text-slate-400">${row.account ? (row.account.name || "") : ""}</div>
-        <div class="text-[10px] text-slate-500">${formatDateTime(a.created_at)}</div>
-      `;
-      container.appendChild(div);
-    });
-  }
-
-  async function loadPipeline() {
-    const data = await apiCall("/insights/pipeline");
-
-    document.getElementById("pipe-total").textContent = formatMoney(data.total_open_value || 0);
-    document.getElementById("pipe-accounts").textContent = String(data.total_open_accounts || 0);
-
-    const tbody = document.getElementById("pipeline-table");
-    tbody.innerHTML = "";
-
-    const stageCounts = {};
-    const items = normItems(data);
-
-    items.forEach(row => {
-      const acc = row.account || row;
-      const stage = acc.stage || "–";
-      stageCounts[stage] = (stageCounts[stage] || 0) + 1;
-
-      const tr = document.createElement("tr");
-      tr.innerHTML = `
-        <td class="px-3 py-2">
-          <div class="text-[12px] font-medium">${acc.name || "—"}</div>
-          <div class="text-[11px] text-slate-400">${stage}</div>
-        </td>
-        <td class="px-3 py-2 text-[11px] text-emerald-300">${formatMoney(row.open_value || acc.pipeline_value || 0)}</td>
-        <td class="px-3 py-2 text-[11px]">${row.open_tasks ?? 0}</td>
-        <td class="px-3 py-2 text-[11px] text-slate-400">${row.last_touch ? formatDateTime(row.last_touch) : "–"}</td>
-      `;
-      if (acc.id) tr.addEventListener("click", () => loadAccount360(acc.id, acc.name));
-      tbody.appendChild(tr);
-    });
-
-    const stageList = document.getElementById("stage-list");
-    stageList.innerHTML = "";
-
-    Object.entries(stageCounts).forEach(([stage, count]) => {
+  function renderAnon(list) {
+    const el = document.getElementById("anonList");
+    el.innerHTML = "";
+    list.slice(0, 30).forEach(v => {
       const row = document.createElement("div");
-      row.className = "flex items-center justify-between";
+      row.className = "p-2 rounded-lg bg-slate-950";
       row.innerHTML = `
-        <div class="flex items-center gap-2">
-          <span class="${pillForStage(stage)}">${stage}</span>
-        </div>
-        <div class="text-[11px] text-slate-300">${count} account${count !== 1 ? "s" : ""}</div>
+        <div><b>${v.anonymous_id}</b> — ${v.ip || "?"}</div>
+        <div class="text-slate-400">${(v.url || "").slice(0,120)}</div>
+        <div class="text-slate-500">${v.created_at || ""}</div>
       `;
-      stageList.appendChild(row);
+      el.appendChild(row);
     });
-
-    if (!items.length) {
-      stageList.innerHTML = `<div class="text-[11px] text-slate-500">No pipeline yet. Set <code class="bg-slate-900 px-1 rounded">pipeline_value</code> on an account.</div>`;
-    }
   }
 
-  async function loadAccount360(accountId) {
-    try {
-      const data = await apiCall(`/accounts/${accountId}/360`);
-
-      document.getElementById("account-360-empty").classList.add("hidden");
-      document.getElementById("account-360-card").classList.remove("hidden");
-
-      const acc = data.account || {};
-
-      document.getElementById("acc360-name").textContent = acc.name || "—";
-      document.getElementById("acc360-meta").textContent =
-        [acc.industry, acc.country].filter(Boolean).join(" · ") || (acc.domain || "");
-
-      const stage = data.stage || "Unknown";
-      const buyer = data.buyer_stage || "Unknown";
-      const intent = Math.round(data.intent_score || 0);
-      const fit = Math.round(data.fit_score || 0);
-      const grade = data.fit_grade || "";
-      const engagement = Math.round(data.engagement_score || 0);
-      const totalScore = Math.round(data.total_score || intent);
-      const risk = data.risk_level || "–";
-      const playbook = data.playbook_label || "—";
-
-      const stagePill = document.getElementById("acc360-stage-pill");
-      stagePill.textContent = "Stage: " + stage;
-      stagePill.className = pillForStage(stage);
-
-      const buyerPill = document.getElementById("acc360-buyer-pill");
-      buyerPill.textContent = "Journey: " + buyer;
-      buyerPill.className = pillForStage(buyer);
-
-      document.getElementById("acc360-intent").textContent = String(intent);
-      document.getElementById("acc360-engagement").textContent = `Engagement: ${engagement} · Total: ${totalScore}`;
-      document.getElementById("acc360-fit").textContent = String(fit);
-      document.getElementById("acc360-grade").textContent = grade;
-      document.getElementById("acc360-risk").textContent = "Risk: " + risk;
-      document.getElementById("acc360-playbook").textContent = playbook && playbook !== "—" ? `Playbook: ${playbook}` : "";
-
-      document.getElementById("acc360-nba").textContent = data.next_best_action || "—";
-      document.getElementById("acc360-nba-reason").textContent = data.next_best_action_reason || "";
-
-      const pipelineValue = data.pipeline_value || acc.pipeline_value || 0;
-      document.getElementById("acc360-pipeline").textContent = formatMoney(pipelineValue);
-
-      const openTasks = data.open_tasks ?? 0;
-      const alertsCount = normItems(data.alerts).length || 0;
-
-      document.getElementById("acc360-tasks").textContent = `${openTasks} tasks · ${alertsCount} alerts`;
-      document.getElementById("acc360-firmo").textContent = data.enrichment_summary || "No firmographic enrichment yet.";
-      document.getElementById("acc360-story").textContent = data.story || "Signals are being collected; story will appear as journeys get richer.";
-
-      // signals mix
-      const sigContainer = document.getElementById("acc360-signals");
-      sigContainer.innerHTML = "";
-
-      const topics = Array.isArray(data.intent_topics) ? data.intent_topics : [];
-      const signals = Array.isArray(data.signals) ? data.signals : [];
-      const combined = topics.length ? topics : signals;
-
-      if (!combined.length) {
-        sigContainer.innerHTML = `<span class="text-[11px] text-slate-500">No dominant topics yet.</span>`;
-      } else {
-        combined.slice(0, 10).forEach(s => {
-          const span = document.createElement("span");
-          span.className = "chip text-[10px]";
-          span.textContent = String(s);
-          sigContainer.appendChild(span);
-        });
-      }
-
-      // contacts + anon
-      const contacts = Array.isArray(data.contacts) ? data.contacts : [];
-      const anonCount = data.anon_visits_count ?? 0;
-      const anonLast = data.anon_last_seen;
-
-      document.getElementById("acc360-contacts-summary").textContent =
-        `${contacts.length} contact${contacts.length !== 1 ? "s" : ""} linked to this account.`;
-
-      document.getElementById("acc360-anon-summary").textContent =
-        anonCount
-          ? `${anonCount} anonymous visit${anonCount !== 1 ? "s" : ""}, last seen ${formatDateTime(anonLast)}`
-          : "No mapped anonymous traffic yet.";
-
-      // recent signals timeline
-      const events = Array.isArray(data.recent_signals) ? data.recent_signals
-                   : Array.isArray(data.recent_events) ? data.recent_events
-                   : [];
-
-      const recentContainer = document.getElementById("acc360-recent");
-      recentContainer.innerHTML = "";
-      document.getElementById("acc360-events-count").textContent = events.length ? `${events.length} recent signals` : "No recent signals";
-
-      events.slice(0, 10).forEach(ev => {
-        const row = document.createElement("div");
-        row.className = "flex items-start justify-between gap-2 border-b border-slate-800/70 last:border-none pb-1";
-        row.innerHTML = `
-          <div>
-            <div class="text-[11px] text-slate-100">${ev.type || "event"}</div>
-            <div class="text-[10px] text-slate-400">${ev.source || ""}</div>
-          </div>
-          <div class="text-[10px] text-slate-400">${formatDateTime(ev.created_at)}</div>
-        `;
-        recentContainer.appendChild(row);
-      });
-
-    } catch (e) {
-      console.error("Account 360 failed", e);
-      alert("Failed to load account 360. Check console for details.");
-    }
+  function renderFeed(items) {
+    const el = document.getElementById("feedList");
+    el.innerHTML = "";
+    items.slice(0, 40).forEach(e => {
+      const row = document.createElement("div");
+      row.className = "p-2 rounded-lg bg-slate-950";
+      row.innerHTML = `
+        <div><b>${e.event_type}</b> — ${e.channel || "?"}</div>
+        <div class="text-slate-400">${(e.url || "").slice(0,120)}</div>
+        <div class="text-slate-500">${e.created_at || ""}</div>
+      `;
+      el.appendChild(row);
+    });
   }
 
-  // ---------- Tab switching ----------
-  function showIntentView() {
-    document.getElementById("view-intent").classList.remove("hidden");
-    document.getElementById("view-pipeline").classList.add("hidden");
+  async function refresh() {
+    const visits = await apiGet("/insights/anon-visits");
+    const feed = await apiGet("/insights/activity-feed");
 
-    document.getElementById("tab-intent").classList.add("bg-slate-100", "text-slate-900", "shadow-sm");
-    document.getElementById("tab-pipeline").classList.remove("bg-slate-100", "text-slate-900", "shadow-sm");
-    document.getElementById("tab-pipeline").classList.add("text-slate-300");
+    document.getElementById("anonCount").innerText = visits.length;
+    document.getElementById("eventCount").innerText = (feed.items || []).length;
+
+    renderAnon(visits);
+    renderFeed(feed.items || []);
   }
 
-  function showPipelineView() {
-    document.getElementById("view-intent").classList.add("hidden");
-    document.getElementById("view-pipeline").classList.remove("hidden");
+  document.getElementById("btnRefresh").onclick = refresh;
 
-    document.getElementById("tab-pipeline").classList.add("bg-slate-100", "text-slate-900", "shadow-sm");
-    document.getElementById("tab-intent").classList.remove("bg-slate-100", "text-slate-900", "shadow-sm");
-    document.getElementById("tab-intent").classList.add("text-slate-300");
-  }
+  document.getElementById("btnTest").onclick = async () => {
+    const anon = "anon_demo_" + Math.random().toString(16).slice(2, 8);
+    await apiPost("/public/track", {
+      event_type: "page_view",
+      anonymous_id: anon,
+      url: window.location.href,
+      path: window.location.pathname,
+      referrer: document.referrer || null,
+      utm: { source: "demo", medium: "cpc", campaign: "pitch" },
+      metadata: { value: 10, currency: "USD" }
+    });
+    await refresh();
+    alert("Test event sent. Refreshing dashboard.");
+  };
 
-  async function refreshAll() {
-    try {
-      document.getElementById("api-status-text").textContent = "Refreshing…";
-      await Promise.all([
-        loadTopAccounts(),
-        loadPlaybookCoverage(),
-        loadActivityFeed(),
-        loadAnonVisits(),
-        loadCompetitors(),
-        loadAlerts(),
-        loadPipeline(),
-      ]);
-      document.getElementById("api-status-text").textContent = "API online";
-    } catch (e) {
-      console.error("Refresh failed", e);
-      document.getElementById("api-status-text").textContent = "API error – check console";
-    }
-  }
-
-  // ---------- MVP demo helper: create 1 anon visit automatically ----------
-  // This will make "Anonymous web" populate so you can demo without installing the pixel on a client website yet.
-  async function demoAnonPingOnce() {
-    try {
-      const key = "__re_demo_anon_pinged_v1";
-      if (localStorage.getItem(key)) return;
-      localStorage.setItem(key, "1");
-
-      await apiCall("/public/track", {
-        method: "POST",
-        auth: false,
-        json: {
-          event_type: "pageview",
-          url: window.location.href,
-          referrer: document.referrer || null,
-          channel: "dashboard",
-          utm_source: null,
-          utm_medium: null,
-          utm_campaign: null
-        }
-      });
-    } catch (e) {
-      // non-blocking
-      console.warn("demoAnonPingOnce failed (non-blocking)", e);
-    }
-  }
-
-  document.addEventListener("DOMContentLoaded", async () => {
-    document.getElementById("tab-intent").addEventListener("click", showIntentView);
-    document.getElementById("tab-pipeline").addEventListener("click", showPipelineView);
-    document.getElementById("refresh-btn").addEventListener("click", refreshAll);
-
-    showIntentView();
-
-    await demoAnonPingOnce();
-    await refreshAll();
-  });
+  refresh().catch(err => console.error(err));
 </script>
 
 </body>
