@@ -1,11 +1,9 @@
-# analytics.py
 from __future__ import annotations
 
 from collections import defaultdict
 from datetime import datetime, timedelta
-from typing import Dict, List, Optional
+from typing import Dict, List, Set
 
-from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from models import Account, Event
@@ -19,156 +17,105 @@ from schemas import (
 )
 
 
+def _window_start(days: int) -> datetime:
+    return datetime.utcnow() - timedelta(days=days)
+
+
 def multi_touch_attribution(
     db: Session,
     workspace_id: str,
-    req: AttributionRequest,
+    payload: AttributionRequest,
 ) -> AttributionResponse:
     """
-    Multi-touch attribution at ACCOUNT level (no session_id stored in DB).
-
-    For each conversion event:
-      • First touch: earliest touch (by created_at) for that account
-      • Last touch: latest touch before the conversion
-      • Linear: revenue split equally across all touches up to that conversion
-
-    Channel is taken from Event.source (preferred) or event_metadata["channel"].
-    Revenue:
-      • Event.value if present
-      • or event_metadata["revenue"] if present
-    Conversion:
-      • req.is_conversion flag in metadata
-      • or value > 0
-      • or event_type in a small conversion list
+    Basic first-touch / last-touch / linear multi-touch attribution by channel.
+    Uses Event.value as "revenue".
     """
-    cutoff = datetime.utcnow() - timedelta(days=req.lookback_days)
+    since = _window_start(payload.lookback_days)
 
-    q = (
-        db.query(Event)
-        .filter(Event.workspace_id == workspace_id)
-        .filter(Event.created_at >= cutoff)
+    q = db.query(Event).filter(
+        Event.workspace_id == workspace_id,
+        Event.created_at >= since,
+        Event.value.isnot(None),
+    )
+    if payload.account_id:
+        q = q.filter(Event.account_id == payload.account_id)
+
+    events: List[Event] = q.order_by(Event.created_at.asc()).all()
+    if not events:
+        return AttributionResponse(account_id=payload.account_id, breakdown=[])
+
+    def channel_for(ev: Event) -> str:
+        if ev.source:
+            return ev.source
+        meta = ev.event_metadata or {}
+        return (
+            meta.get("channel")
+            or meta.get("utm_source")
+            or meta.get("utm_medium")
+            or "unknown"
+        )
+
+    by_account: Dict[str, List[Event]] = defaultdict(list)
+    for ev in events:
+        key = ev.account_id or "_anon"
+        by_account[key].append(ev)
+
+    channel_stats: Dict[str, Dict[str, float]] = defaultdict(
+        lambda: {"first_touch": 0.0, "last_touch": 0.0, "linear": 0.0}
     )
 
-    if req.account_id:
-        q = q.filter(Event.account_id == req.account_id)
-
-    events: List[Event] = q.order_by(Event.account_id, Event.created_at).all()
-
-    # Group events by account_id
-    events_by_account: Dict[str, List[Event]] = defaultdict(list)
-    for e in events:
-        events_by_account[e.account_id].append(e)
-
-    channel_stats: Dict[str, AttributedChannel] = {}
-
-    def get_channel_name(ev: Event) -> str:
-        md = ev.event_metadata or {}
-        ch = ev.source or md.get("channel")
-        return ch or "unknown"
-
-    def get_revenue(ev: Event) -> float:
-        md = ev.event_metadata or {}
-        if ev.value is not None:
-            return float(ev.value)
-        if md.get("revenue") is not None:
-            try:
-                return float(md["revenue"])
-            except (TypeError, ValueError):
-                return 0.0
-        return 0.0
-
-    def is_conversion(ev: Event) -> bool:
-        md = ev.event_metadata or {}
-        if md.get("is_conversion"):
-            return True
-        if get_revenue(ev) > 0:
-            return True
-        return ev.event_type in {
-            "booking",
-            "purchase",
-            "deal_closed",
-            "opportunity_won",
-            "form_submit",
-        }
-
-    for account_id, acc_events in events_by_account.items():
-        # sorted by created_at from query
-        touches = [e for e in acc_events if get_channel_name(e) != "unknown"]
-
-        if not touches:
+    for _, evts in by_account.items():
+        if not evts:
             continue
 
-        for conv in [e for e in acc_events if is_conversion(e)]:
-            revenue = get_revenue(conv)
-            if revenue <= 0:
-                continue
+        first = evts[0]
+        last = evts[-1]
+        total_value = sum(float(e.value or 0.0) for e in evts)
+        unique_channels: Set[str] = {channel_for(e) for e in evts}
 
-            # Path up to conversion
-            path = [e for e in touches if e.created_at <= conv.created_at]
-            if not path:
-                continue
+        ft_ch = channel_for(first)
+        lt_ch = channel_for(last)
 
-            first_touch = path[0]
-            last_touch = path[-1]
+        channel_stats[ft_ch]["first_touch"] += float(first.value or 0.0)
+        channel_stats[lt_ch]["last_touch"] += float(last.value or 0.0)
 
-            def stat_for(channel_name: str) -> AttributedChannel:
-                if channel_name not in channel_stats:
-                    channel_stats[channel_name] = AttributedChannel(channel=channel_name)
-                return channel_stats[channel_name]
+        if unique_channels and total_value:
+            share = total_value / float(len(unique_channels))
+            for ch in unique_channels:
+                channel_stats[ch]["linear"] += share
 
-            # First-touch revenue
-            ft = stat_for(get_channel_name(first_touch))
-            ft.first_touch_revenue += revenue
+    breakdown: List[AttributedChannel] = []
+    for ch, vals in channel_stats.items():
+        breakdown.append(
+            AttributedChannel(
+                channel=ch,
+                first_touch=round(vals["first_touch"], 2),
+                last_touch=round(vals["last_touch"], 2),
+                linear=round(vals["linear"], 2),
+            )
+        )
 
-            # Last-touch revenue
-            lt = stat_for(get_channel_name(last_touch))
-            lt.last_touch_revenue += revenue
-            lt.conversions += 1
-
-            # Linear attribution
-            share = revenue / len(path)
-            for e in path:
-                lc = stat_for(get_channel_name(e))
-                lc.linear_revenue += share
-
-    return AttributionResponse(channels=list(channel_stats.values()))
+    breakdown.sort(key=lambda x: x.linear, reverse=True)
+    return AttributionResponse(account_id=payload.account_id, breakdown=breakdown)
 
 
 def segment_accounts(
     db: Session,
     workspace_id: str,
-    req: SegmentationRequest,
+    payload: SegmentationRequest,
 ) -> SegmentationResponse:
     """
-    Segment accounts into:
-      • Active_high_intent: many visits + recently active
-      • Low_intent: some activity, not hot
-      • Dormant: no activity or very old
-
-    Uses:
-      - Account.last_event_at
-      - Event counts per account
-      - Optional filters from SegmentFilter
+    Simple segmentation:
+      - Active_high_intent: total_score >= 70 and last activity in last 30 days
+      - Low_intent: total_score < 20
+      - Dormant: everyone else
+    Payload.filters is reserved for future advanced filters.
     """
-    filters = req.filters
     now = datetime.utcnow()
+    cutoff = now - timedelta(days=30)
 
-    # Base accounts query
-    acc_q = db.query(Account).filter(Account.workspace_id == workspace_id)
-
-    if filters.industries:
-        acc_q = acc_q.filter(Account.industry.in_(filters.industries))
-    if filters.stages:
-        acc_q = acc_q.filter(Account.stage.in_(filters.stages))
-
-    accounts: List[Account] = acc_q.all()
-
-    # Event counts per account for this workspace
-    ev_counts = dict(
-        db.query(Event.account_id, func.count(Event.id))
-        .filter(Event.workspace_id == workspace_id)
-        .group_by(Event.account_id)
-        .all()
+    accounts: List[Account] = (
+        db.query(Account).filter(Account.workspace_id == workspace_id).all()
     )
 
     active_high_intent: List[str] = []
@@ -176,27 +123,15 @@ def segment_accounts(
     dormant: List[str] = []
 
     for acc in accounts:
-        acc_id = acc.id
-        total_visits = int(ev_counts.get(acc_id, 0))
-        last_seen = acc.last_event_at
+        last = acc.last_activity_at or acc.updated_at or acc.created_at
+        score = float(acc.total_score or 0.0)
 
-        # Filter: min_visits
-        if filters.min_visits is not None and total_visits < filters.min_visits:
-            continue
-
-        # Filter: max_inactive_days
-        if filters.max_inactive_days is not None and last_seen is not None:
-            inactive_days = (now - last_seen).days
-            if inactive_days > filters.max_inactive_days:
-                continue
-
-        # Basic buckets
-        if total_visits >= 5 and last_seen and (now - last_seen).days <= 7:
-            active_high_intent.append(acc_id)
-        elif not last_seen or (now - last_seen).days > 30:
-            dormant.append(acc_id)
+        if score >= 70 and last >= cutoff:
+            active_high_intent.append(acc.id)
+        elif score < 20:
+            low_intent.append(acc.id)
         else:
-            low_intent.append(acc_id)
+            dormant.append(acc.id)
 
     segments: List[Segment] = []
     if active_high_intent:
