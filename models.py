@@ -27,11 +27,12 @@ def _uuid() -> str:
 class Workspace(Base):
     __tablename__ = "workspaces"
 
-    id = Column(String, primary_key=True, default=_uuid)
-    name = Column(String, nullable=False)
+    id = Column(String, primary_key=True)
+    name = Column(String, nullable=False, default="Default Workspace")
     created_at = Column(DateTime, default=datetime.utcnow)
 
     api_keys = relationship("APIKey", back_populates="workspace")
+    accounts = relationship("Account", back_populates="workspace")
 
 
 class APIKey(Base):
@@ -39,8 +40,9 @@ class APIKey(Base):
 
     id = Column(String, primary_key=True, default=_uuid)
     workspace_id = Column(String, ForeignKey("workspaces.id"), nullable=False)
-    key = Column(String, nullable=False, unique=True)
-    label = Column(String, nullable=True)
+
+    key = Column(String, nullable=False, unique=True, index=True)
+    label = Column(String, default="Default key")
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
@@ -54,33 +56,24 @@ class Account(Base):
     workspace_id = Column(String, ForeignKey("workspaces.id"), nullable=False)
 
     name = Column(String, nullable=False)
-    domain = Column(String, nullable=True)
-    owner = Column(String, nullable=True)
-    country = Column(String, nullable=True)
+    domain = Column(String, nullable=True, index=True)
     industry = Column(String, nullable=True)
-
-    stage = Column(String, nullable=True)
+    employee_range = Column(String, nullable=True)
+    country = Column(String, nullable=True)
 
     intent_score = Column(Float, default=0.0)
     fit_score = Column(Float, default=0.0)
     engagement_score = Column(Float, default=0.0)
-    predictive_score = Column(Float, default=0.0)
-    total_score = Column(Float, default=0.0)
-    buyer_stage = Column(String, nullable=True)
-
-    last_event_at = Column(DateTime, nullable=True)
-    last_source = Column(String, nullable=True)
+    stage = Column(String, default="unknown")  # cold/warm/hot, etc.
 
     created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
-    workspace = relationship("Workspace")
-
-    contacts = relationship("Contact", back_populates="account", cascade="all, delete-orphan")
-    events = relationship("Event", back_populates="account", cascade="all, delete-orphan")
-    tasks = relationship("Task", back_populates="account", cascade="all, delete-orphan")
-    alerts = relationship("Alert", back_populates="account", cascade="all, delete-orphan")
-    anon_visits = relationship("AnonymousVisit", back_populates="account", cascade="all, delete-orphan")
+    workspace = relationship("Workspace", back_populates="accounts")
+    contacts = relationship("Contact", back_populates="account")
+    events = relationship("Event", back_populates="account")
+    tasks = relationship("Task", back_populates="account")
+    alerts = relationship("Alert", back_populates="account")
+    anon_visits = relationship("AnonymousVisit", back_populates="account")
 
 
 class Contact(Base):
@@ -88,17 +81,15 @@ class Contact(Base):
 
     id = Column(String, primary_key=True, default=_uuid)
     workspace_id = Column(String, ForeignKey("workspaces.id"), nullable=False)
-    account_id = Column(String, ForeignKey("accounts.id"), nullable=False)
+    account_id = Column(String, ForeignKey("accounts.id"), nullable=True)
 
-    name = Column(String, nullable=False)
-    email = Column(String, nullable=True)
+    email = Column(String, nullable=True, index=True)
+    first_name = Column(String, nullable=True)
+    last_name = Column(String, nullable=True)
     title = Column(String, nullable=True)
-    phone = Column(String, nullable=True)
 
     created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
-    workspace = relationship("Workspace")
     account = relationship("Account", back_populates="contacts")
 
 
@@ -107,27 +98,26 @@ class Event(Base):
 
     id = Column(String, primary_key=True, default=_uuid)
     workspace_id = Column(String, ForeignKey("workspaces.id"), nullable=False)
-    account_id = Column(String, ForeignKey("accounts.id"), nullable=False)
-    contact_id = Column(String, ForeignKey("contacts.id"), nullable=True)
+    account_id = Column(String, ForeignKey("accounts.id"), nullable=True)
 
-    event_type = Column(String, nullable=False)  # e.g. "pageview", "form_submit", etc.
-    source = Column(String, nullable=True)  # website, outbound, crm, email, etc.
-    page = Column(String, nullable=True)
-    route = Column(String, nullable=True)
-    url = Column(String, nullable=True)
-    event_metadata = Column(JSON, nullable=True)
+    event_type = Column(String, nullable=False)  # page_view, form_submit, etc
+    source = Column(String, nullable=True)  # web, ad, crm, etc
 
-    value = Column(Float, nullable=True)
-    duration = Column(Integer, nullable=True)
+    url = Column(Text, nullable=True)
+    path = Column(String, nullable=True)
+    referrer = Column(Text, nullable=True)
 
-    intent_score = Column(Float, default=0.0)
-    engagement_score = Column(Float, default=0.0)
+    utm = Column(JSON, nullable=True)
+    metadata = Column(JSON, nullable=True)
+
+    ip = Column(String, nullable=True)
+    user_agent = Column(Text, nullable=True)
+
+    anonymous_id = Column(String, nullable=True, index=True)
 
     created_at = Column(DateTime, default=datetime.utcnow)
 
-    workspace = relationship("Workspace")
     account = relationship("Account", back_populates="events")
-    contact = relationship("Contact")
 
 
 class Task(Base):
@@ -135,19 +125,16 @@ class Task(Base):
 
     id = Column(String, primary_key=True, default=_uuid)
     workspace_id = Column(String, ForeignKey("workspaces.id"), nullable=False)
-    account_id = Column(String, ForeignKey("accounts.id"), nullable=False)
+    account_id = Column(String, ForeignKey("accounts.id"), nullable=True)
 
     title = Column(String, nullable=False)
     description = Column(Text, nullable=True)
-    status = Column(String, default="open")  # open, in_progress, done
-    owner = Column(String, nullable=True)
+    status = Column(String, default="open")  # open/done
+    priority = Column(String, default="normal")  # low/normal/high
     due_at = Column(DateTime, nullable=True)
-    source = Column(String, nullable=True)
 
     created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
-    workspace = relationship("Workspace")
     account = relationship("Account", back_populates="tasks")
 
 
@@ -158,15 +145,12 @@ class Alert(Base):
     workspace_id = Column(String, ForeignKey("workspaces.id"), nullable=False)
     account_id = Column(String, ForeignKey("accounts.id"), nullable=True)
 
-    title = Column(String, nullable=False)
-    body = Column(Text, nullable=True)
-    type = Column(String, nullable=True)  # score_spike, churn_risk, etc.
-    severity = Column(String, nullable=True)  # low, medium, high
-    is_read = Column(Boolean, default=False)
+    severity = Column(String, default="low")  # low/med/high
+    category = Column(String, default="signal")  # risk, signal, etc
+    message = Column(Text, nullable=False)
 
     created_at = Column(DateTime, default=datetime.utcnow)
 
-    workspace = relationship("Workspace")
     account = relationship("Account", back_populates="alerts")
 
 
@@ -177,18 +161,19 @@ class AnonymousVisit(Base):
     workspace_id = Column(String, ForeignKey("workspaces.id"), nullable=False)
     account_id = Column(String, ForeignKey("accounts.id"), nullable=True)
 
+    anonymous_id = Column(String, nullable=False, index=True)
     ip = Column(String, nullable=True)
     user_agent = Column(Text, nullable=True)
-    url = Column(String, nullable=True)
-    referrer = Column(String, nullable=True)
-    country = Column(String, nullable=True)
-    city = Column(String, nullable=True)
-    company_guess = Column(String, nullable=True)
-    raw = Column(JSON, nullable=True)
+
+    first_seen = Column(DateTime, default=datetime.utcnow)
+    last_seen = Column(DateTime, default=datetime.utcnow)
+    visit_count = Column(Integer, default=1)
+
+    utm_first = Column(JSON, nullable=True)
+    utm_last = Column(JSON, nullable=True)
 
     created_at = Column(DateTime, default=datetime.utcnow)
 
-    workspace = relationship("Workspace")
     account = relationship("Account", back_populates="anon_visits")
 
 
@@ -196,63 +181,16 @@ class IpCompanyMap(Base):
     __tablename__ = "ip_company_map"
 
     id = Column(String, primary_key=True, default=_uuid)
-    workspace_id = Column(String, ForeignKey("workspaces.id"), nullable=False)
+    ip = Column(String, nullable=False, unique=True, index=True)
 
-    ip = Column(String, nullable=False)
     company_name = Column(String, nullable=True)
-    domain = Column(String, nullable=True)
+    domain = Column(String, nullable=True, index=True)
+    industry = Column(String, nullable=True)
+    employee_range = Column(String, nullable=True)
     country = Column(String, nullable=True)
-    city = Column(String, nullable=True)
-    source = Column(String, nullable=True)
 
+    raw = Column(JSON, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
-
-    workspace = relationship("Workspace")
-
-
-# -----------------------
-# CRM / Opportunities / Playbooks (extensions)
-# -----------------------
-
-class CRMConnection(Base):
-    __tablename__ = "crm_connections"
-
-    id = Column(String, primary_key=True, default=_uuid)
-    workspace_id = Column(String, ForeignKey("workspaces.id"), nullable=False)
-
-    provider = Column(String, nullable=False)  # "hubspot", "salesforce", etc.
-    name = Column(String, nullable=True)
-
-    access_token = Column(Text, nullable=True)
-    refresh_token = Column(Text, nullable=True)
-    config = Column(JSON, nullable=True)   # <- OK
-
-    is_active = Column(Boolean, default=True)
-
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-
-    workspace = relationship("Workspace")
-
-
-class ExternalObjectMap(Base):
-    # Maps external CRM objects to internal objects.
-    __tablename__ = "external_object_map"
-
-    id = Column(String, primary_key=True, default=_uuid)
-    workspace_id = Column(String, ForeignKey("workspaces.id"), nullable=False)
-
-    provider = Column(String, nullable=False)
-    external_object_type = Column(String, nullable=False)  # account, contact, opportunity
-    external_id = Column(String, nullable=False)
-
-    internal_object_type = Column(String, nullable=False)  # account, contact, opportunity
-    internal_id = Column(String, nullable=False)
-
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-
-    workspace = relationship("Workspace")
 
 
 class Opportunity(Base):
@@ -260,25 +198,14 @@ class Opportunity(Base):
 
     id = Column(String, primary_key=True, default=_uuid)
     workspace_id = Column(String, ForeignKey("workspaces.id"), nullable=False)
-    account_id = Column(String, ForeignKey("accounts.id"), nullable=False)
+    account_id = Column(String, ForeignKey("accounts.id"), nullable=True)
 
     name = Column(String, nullable=False)
-    amount = Column(Float, nullable=True)
-    currency = Column(String, nullable=True)
-
-    stage = Column(String, nullable=True)   # e.g. "open", "proposal", "won", "lost"
-    status = Column(String, nullable=True)  # "open", "won", "lost"
-
-    close_date = Column(DateTime, nullable=True)
-    source = Column(String, nullable=True)  # "crm", "manual", etc.
-    external_id = Column(String, nullable=True)  # CRM opportunity id
+    stage = Column(String, default="pipeline")
+    amount = Column(Float, default=0.0)
+    probability = Column(Float, default=0.0)
 
     created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-
-    workspace = relationship("Workspace")
-    account = relationship("Account")
-    touches = relationship("RevenueAttributionTouch", back_populates="opportunity", cascade="all, delete-orphan")
 
 
 class RevenueAttributionTouch(Base):
@@ -286,24 +213,23 @@ class RevenueAttributionTouch(Base):
 
     id = Column(String, primary_key=True, default=_uuid)
     workspace_id = Column(String, ForeignKey("workspaces.id"), nullable=False)
-    opportunity_id = Column(String, ForeignKey("opportunities.id"), nullable=False)
+
+    account_id = Column(String, ForeignKey("accounts.id"), nullable=True)
+    opportunity_id = Column(String, ForeignKey("opportunities.id"), nullable=True)
+
+    touch_type = Column(String, nullable=False)  # first_touch, last_touch, touch
+    channel = Column(String, nullable=True)
+    source = Column(String, nullable=True)
+    campaign = Column(String, nullable=True)
+    content = Column(String, nullable=True)
 
     event_id = Column(String, ForeignKey("events.id"), nullable=True)
-    anon_visit_id = Column(String, ForeignKey("anonymous_visits.id"), nullable=True)
-
-    touch_type = Column(String, nullable=True)  # "first", "middle", "last"
-    weight = Column(Float, default=1.0)
+    weight = Column(Float, default=0.0)
 
     created_at = Column(DateTime, default=datetime.utcnow)
 
-    workspace = relationship("Workspace")
-    opportunity = relationship("Opportunity", back_populates="touches")
-    event = relationship("Event")
-    anon_visit = relationship("AnonymousVisit")
-
 
 class PlaybookRule(Base):
-    # Simple rule engine for scores → tasks/alerts/CRM.
     __tablename__ = "playbook_rules"
 
     id = Column(String, primary_key=True, default=_uuid)
@@ -313,25 +239,10 @@ class PlaybookRule(Base):
     description = Column(Text, nullable=True)
     is_active = Column(Boolean, default=True)
 
-    # Conditions
-    min_total_score = Column(Float, nullable=True)
-    min_intent_score = Column(Float, nullable=True)
-    buyer_stage_in = Column(JSON, nullable=True)  # list of stages
-    countries_in = Column(JSON, nullable=True)    # list of country codes/names
-    stages_in = Column(JSON, nullable=True)       # list of pipeline stages
-    has_open_tasks = Column(Boolean, nullable=True)
+    # Simple rule config (extend later)
+    min_intent_score = Column(Float, default=0.0)
+    min_fit_score = Column(Float, default=0.0)
+    min_engagement_score = Column(Float, default=0.0)
 
-    # Actions
-    create_task = Column(Boolean, default=False)
-    create_alert = Column(Boolean, default=False)
-    push_to_crm = Column(Boolean, default=False)
-
-    task_title_template = Column(String, nullable=True)
-    alert_title_template = Column(String, nullable=True)
-    alert_severity = Column(String, nullable=True)  # low/medium/high
-    owner = Column(String, nullable=True)           # assignee for created tasks
-
+    recommended_action = Column(String, nullable=False)  # e.g. "Call within 24h"
     created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-
-    workspace = relationship("Workspace")
