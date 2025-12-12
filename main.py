@@ -1,9 +1,9 @@
 from __future__ import annotations
 
+import os
+
 from datetime import datetime
 from typing import Any, Dict, List, Optional
-
-import os
 
 from fastapi import (
     Depends,
@@ -19,8 +19,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import func
-from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import IntegrityError
 
 from database import Base, engine, get_db
 # Try to import real IP resolver; if missing, use a dummy one so Render doesn't crash
@@ -104,11 +104,15 @@ Base.metadata.create_all(bind=engine)
 
 DEFAULT_WORKSPACE_ID = "default-workspace"
 DEFAULT_WORKSPACE_NAME = "Default Workspace"
-API_KEY = os.getenv("DEMO_API_KEY", "supersecret123")  # dev/demo; set DEMO_API_KEY in Render
+API_KEY = os.getenv("MMKK_API_KEY", "supersecret123")  # set MMKK_API_KEY on Render
 
 
 @app.on_event("startup")
 def bootstrap_workspace_and_key():
+    """
+    Create the default workspace + API key in an idempotent way.
+    This must NOT crash if rows already exist (Render restarts/redeploys).
+    """
     db = next(get_db())
     try:
         ws = (
@@ -122,29 +126,22 @@ def bootstrap_workspace_and_key():
             db.commit()
             db.refresh(ws)
 
-        api_key_row = (
-            db.query(APIKey)
-            .filter(
-                APIKey.workspace_id == DEFAULT_WORKSPACE_ID,
-                APIKey.key == API_KEY,
-            )
-            .first()
-        )
-        if not api_key_row:
+        existing = db.query(APIKey).filter(APIKey.key == API_KEY).first()
+        if not existing:
             api_key_row = APIKey(
                 workspace_id=DEFAULT_WORKSPACE_ID,
                 key=API_KEY,
-                label="Default key",
+                label="Default demo key",
                 is_active=True,
             )
             db.add(api_key_row)
             try:
                 db.commit()
             except IntegrityError:
-                # Key already exists (unique constraint). Safe to ignore for idempotent startup.
                 db.rollback()
     finally:
         db.close()
+
 
 
 def get_workspace_id() -> str:
