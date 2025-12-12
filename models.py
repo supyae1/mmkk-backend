@@ -106,7 +106,7 @@ class Event(Base):
 
     utm = Column(JSON, nullable=True)
     channel = Column(String, nullable=True)
-    metadata = Column(JSON, nullable=True)
+    event_metadata = Column("metadata", JSON, nullable=True)
 
     created_at = Column(DateTime, default=datetime.utcnow)
 
