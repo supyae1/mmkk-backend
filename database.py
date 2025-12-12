@@ -1,8 +1,10 @@
 import os
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker, declarative_base
 
-# Use DATABASE_URL from environment (Render + Supabase)
+from sqlalchemy import create_engine
+from sqlalchemy.orm import declarative_base, sessionmaker
+
+# On Render / Supabase, set DATABASE_URL in env, e.g.:
+# postgres://user:password@host:5432/dbname
 DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./local.db")
 
 engine = create_engine(
