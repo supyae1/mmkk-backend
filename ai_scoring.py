@@ -56,7 +56,7 @@ def _estimate_buying_timeline(events: List[Event]) -> str:
 def _aggregate_channels(events: List[Event]) -> Dict[str, int]:
     counts: Dict[str, int] = {}
     for e in events:
-        src = (e.source or "unknown").lower()
+        src = (e.channel or "unknown").lower()
         counts[src] = counts.get(src, 0) + 1
     return counts
 
