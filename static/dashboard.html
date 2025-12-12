@@ -60,7 +60,7 @@
 
   document.getElementById("apiBase").innerText = API_BASE;
   document.getElementById("pixelSnippet").innerText =
-`<script src="${API_BASE}/pixel.js" data-api-key="${API_KEY}"></script>`;
+`<script src="${API_BASE}/pixel.js" data-api-key="${API_KEY}"><\/script>`;
 
   async function apiGet(path) {
     const res = await fetch(API_BASE + path, {
