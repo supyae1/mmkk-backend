@@ -90,7 +90,7 @@ class AccountRead(AccountBase):
     buyer_stage: Optional[str] = None
     last_activity_at: Optional[datetime] = None
     created_at: datetime
-    updated_at: datetime
+    updated_at: Optional[datetime] = None
 
 
 class ContactBase(ORMModel):
@@ -109,7 +109,7 @@ class ContactRead(ContactBase):
     id: str
     account_id: Optional[str] = None
     created_at: datetime
-    updated_at: datetime
+    updated_at: Optional[datetime] = None
 
 
 # -----------------------
@@ -129,7 +129,7 @@ class TaskCreate(ORMModel):
 class TaskRead(TaskCreate):
     id: str
     created_at: datetime
-    updated_at: datetime
+    updated_at: Optional[datetime] = None
 
 
 class AlertCreate(ORMModel):
@@ -144,7 +144,7 @@ class AlertCreate(ORMModel):
 class AlertRead(AlertCreate):
     id: str
     created_at: datetime
-    updated_at: datetime
+    updated_at: Optional[datetime] = None
 
 
 # -----------------------
@@ -265,7 +265,7 @@ class OpportunityUpdate(ORMModel):
 class OpportunityRead(OpportunityBase):
     id: str
     created_at: datetime
-    updated_at: datetime
+    updated_at: Optional[datetime] = None
 
 
 # -----------------------
@@ -336,4 +336,4 @@ class PlaybookRuleCreate(PlaybookRuleBase):
 class PlaybookRuleRead(PlaybookRuleBase):
     id: str
     created_at: datetime
-    updated_at: datetime
+    updated_at: Optional[datetime] = None
