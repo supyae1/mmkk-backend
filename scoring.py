@@ -1,7 +1,7 @@
-# scoring.py
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Optional, Tuple
 
 from models import Account, Event
 
@@ -16,62 +16,54 @@ class ScoreTotals:
 
 
 def _event_intent_weight(event: Event) -> float:
-    """
-    Simple heuristic weights.
-    You can refine later based on your 6sense-style logic.
-    """
     et = (event.event_type or "").lower()
-    if et in {"form_submit", "signup", "demo_request"}:
+    if et in {"signup", "demo_request", "booking_completed"}:
         return 10.0
-    if et in {"pageview", "page_view"}:
-        return 1.5
-    if et in {"email_click"}:
+    if et in {"pricing_view", "pageview_pricing"}:
+        return 5.0
+    if et in {"webinar_attended", "content_download"}:
         return 3.0
-    return 1.0
+    if et in {"pageview"}:
+        return 1.0
+    return 2.0
 
 
 def _event_engagement_weight(event: Event) -> float:
-    if event.duration and event.duration > 120:
+    src = (event.source or "").lower()
+    if src in {"paid_search", "paid_social"}:
+        return 4.0
+    if src in {"email"}:
         return 3.0
-    if event.duration and event.duration > 30:
-        return 2.0
+    if src in {"organic", "direct"}:
+        return 1.5
     return 1.0
 
 
-def _buyer_stage_from_scores(intent: float, engagement: float, total: float) -> str:
-    score = total
-    if score >= 80:
-        return "buying"
-    if score >= 50:
-        return "evaluating"
-    if score >= 25:
-        return "considering"
-    if score >= 10:
-        return "aware"
-    return "unaware"
-
-
-def score_event(account: Account, event: Event) -> tuple[float, float, ScoreTotals]:
+def score_event(
+    account: Optional[Account],
+    event: Event,
+) -> Tuple[float, float, ScoreTotals]:
     """
-    Given an Account + new Event, compute:
-      - event intent & engagement score
-      - updated account scores
+    Simple scoring model combining:
+    - event intent weight
+    - event engagement weight
+    - event value (revenue) if present
     """
-    base_intent = account.intent_score or 0.0
-    base_engagement = account.engagement_score or 0.0
-    base_fit = account.fit_score or 0.0
-    base_predictive = account.predictive_score or 0.0
-    base_total = account.total_score or 0.0
+    base_intent = float(account.intent_score) if account else 0.0
+    base_engagement = float(account.engagement_score) if account else 0.0
+    base_fit = float(account.fit_score) if account else 0.0
+    base_predictive = float(account.predictive_score) if account else 0.0
 
-    intent_weight = _event_intent_weight(event)
-    engagement_weight = _event_engagement_weight(event)
+    w_intent = _event_intent_weight(event)
+    w_engagement = _event_engagement_weight(event)
+    revenue = float(event.value or 0.0)
 
-    event_intent = intent_weight
-    event_engagement = engagement_weight
+    event_intent = w_intent + 0.1 * revenue
+    event_engagement = w_engagement + 0.05 * revenue
 
     new_intent = base_intent + event_intent
     new_engagement = base_engagement + event_engagement
-    new_fit = base_fit  # you can plug external models later
+    new_fit = base_fit  # placeholder for future ML fit model
     new_predictive = base_predictive + 0.5 * (event_intent + event_engagement)
     new_total = new_intent + new_engagement + new_fit + new_predictive
 
