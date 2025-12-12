@@ -35,7 +35,6 @@ def multi_touch_attribution(
     q = db.query(Event).filter(
         Event.workspace_id == workspace_id,
         Event.created_at >= since,
-        Event.value.isnot(None),
     )
     if payload.account_id:
         q = q.filter(Event.account_id == payload.account_id)
@@ -45,8 +44,8 @@ def multi_touch_attribution(
         return AttributionResponse(account_id=payload.account_id, breakdown=[])
 
     def channel_for(ev: Event) -> str:
-        if ev.source:
-            return ev.source
+        if ev.channel:
+            return ev.channel
         meta = ev.event_metadata or {}
         return (
             meta.get("channel")
@@ -70,14 +69,20 @@ def multi_touch_attribution(
 
         first = evts[0]
         last = evts[-1]
-        total_value = sum(float(e.value or 0.0) for e in evts)
+        def _val(e):
+            meta = e.event_metadata or {}
+            try:
+                return float(meta.get("value") or meta.get("revenue") or 0.0)
+            except Exception:
+                return 0.0
+        total_value = sum(_val(e) for e in evts)
         unique_channels: Set[str] = {channel_for(e) for e in evts}
 
         ft_ch = channel_for(first)
         lt_ch = channel_for(last)
 
-        channel_stats[ft_ch]["first_touch"] += float(first.value or 0.0)
-        channel_stats[lt_ch]["last_touch"] += float(last.value or 0.0)
+        channel_stats[ft_ch]["first_touch"] += _val(first)
+        channel_stats[lt_ch]["last_touch"] += _val(last)
 
         if unique_channels and total_value:
             share = total_value / float(len(unique_channels))
